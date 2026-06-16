@@ -1,0 +1,3 @@
+# Excluir carpetas de build llamadas target (Python/Java/React)
+target/
+**/target/
