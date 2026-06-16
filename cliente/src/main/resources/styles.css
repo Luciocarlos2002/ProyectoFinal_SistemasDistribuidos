@@ -1,0 +1,345 @@
+/* ============================================================
+   Sakila Rental POS — Dark Professional Theme
+   ============================================================ */
+
+.root {
+    -fx-background-color: #0f172a;
+    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ============================================================
+   APP HEADER
+   ============================================================ */
+
+.app-header {
+    -fx-background-color: #1e293b;
+    -fx-padding: 14 24 14 24;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.6), 10, 0, 0, 3);
+}
+
+.header-title {
+    -fx-text-fill: #f1f5f9;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.header-subtitle {
+    -fx-text-fill: #3b82f6;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+
+/* ============================================================
+   TAB PANE
+   ============================================================ */
+
+.tab-pane {
+    -fx-background-color: transparent;
+}
+
+.tab-pane .tab-header-area {
+    -fx-background-color: #1e293b;
+    -fx-padding: 8 16 0 16;
+}
+
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #1e293b;
+}
+
+.tab-pane .tab-header-area .headers-region .tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8 8 0 0;
+    -fx-padding: 9 22 9 22;
+}
+
+.tab-pane .tab-header-area .headers-region .tab:selected {
+    -fx-background-color: #0f172a;
+}
+
+.tab-pane .tab-header-area .headers-region .tab .tab-label {
+    -fx-text-fill: #475569;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+.tab-pane .tab-header-area .headers-region .tab:selected .tab-label {
+    -fx-text-fill: #3b82f6;
+}
+
+.tab-pane .tab-header-area .headers-region .tab:hover .tab-label {
+    -fx-text-fill: #94a3b8;
+}
+
+.tab-pane .tab-content-area {
+    -fx-background-color: #0f172a;
+    -fx-padding: 0;
+}
+
+/* ============================================================
+   TEXT FIELDS
+   ============================================================ */
+
+.text-field {
+    -fx-background-color: #0f172a;
+    -fx-text-fill: #f1f5f9;
+    -fx-background-radius: 8;
+    -fx-border-color: #334155;
+    -fx-border-radius: 8;
+    -fx-border-width: 1.5;
+    -fx-padding: 10 14 10 14;
+    -fx-font-size: 14px;
+    -fx-prompt-text-fill: #475569;
+    -fx-pref-height: 44px;
+}
+
+.text-field:focused {
+    -fx-border-color: #3b82f6;
+    -fx-effect: dropshadow(gaussian, rgba(59,130,246,0.25), 8, 0, 0, 0);
+}
+
+/* ============================================================
+   SCROLL PANE
+   ============================================================ */
+
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane > .corner {
+    -fx-background-color: #0f172a;
+}
+
+.scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+}
+
+.scroll-bar:vertical .thumb {
+    -fx-background-color: #334155;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:vertical .increment-button,
+.scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-pref-height: 0;
+}
+
+.scroll-bar:vertical .increment-arrow,
+.scroll-bar:vertical .decrement-arrow {
+    -fx-shape: "";
+    -fx-pref-height: 0;
+    -fx-pref-width: 0;
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.card {
+    -fx-background-color: #1e293b;
+    -fx-background-radius: 12;
+    -fx-padding: 24;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 14, 0, 0, 5);
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.btn-primary {
+    -fx-background-color: #3b82f6;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+    -fx-background-radius: 8;
+    -fx-padding: 11 24 11 24;
+    -fx-cursor: hand;
+    -fx-border-width: 0;
+}
+
+.btn-primary:hover {
+    -fx-background-color: #2563eb;
+    -fx-effect: dropshadow(gaussian, rgba(59,130,246,0.5), 10, 0, 0, 2);
+}
+
+.btn-primary:pressed {
+    -fx-background-color: #1d4ed8;
+}
+
+.btn-primary:disabled {
+    -fx-background-color: #1e3a5f;
+    -fx-text-fill: #4b6fa8;
+    -fx-opacity: 1;
+    -fx-cursor: default;
+}
+
+.btn-success {
+    -fx-background-color: #10b981;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+    -fx-background-radius: 8;
+    -fx-padding: 11 24 11 24;
+    -fx-cursor: hand;
+    -fx-border-width: 0;
+}
+
+.btn-success:hover {
+    -fx-background-color: #059669;
+    -fx-effect: dropshadow(gaussian, rgba(16,185,129,0.45), 10, 0, 0, 2);
+}
+
+.btn-success:disabled {
+    -fx-background-color: #0d3528;
+    -fx-text-fill: #1f6b4a;
+    -fx-opacity: 1;
+    -fx-cursor: default;
+}
+
+.btn-warning {
+    -fx-background-color: transparent;
+    -fx-text-fill: #f59e0b;
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+    -fx-background-radius: 8;
+    -fx-padding: 10 22 10 22;
+    -fx-cursor: hand;
+    -fx-border-color: #f59e0b;
+    -fx-border-width: 1.5;
+    -fx-border-radius: 8;
+}
+
+.btn-warning:hover {
+    -fx-background-color: rgba(245,158,11,0.1);
+    -fx-effect: dropshadow(gaussian, rgba(245,158,11,0.35), 8, 0, 0, 0);
+}
+
+/* ============================================================
+   LABELS & TYPOGRAPHY
+   ============================================================ */
+
+.label {
+    -fx-text-fill: #e2e8f0;
+}
+
+.section-title {
+    -fx-text-fill: #f1f5f9;
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+}
+
+.section-subtitle {
+    -fx-text-fill: #475569;
+    -fx-font-size: 13px;
+}
+
+.field-label {
+    -fx-text-fill: #475569;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+
+.divider {
+    -fx-background-color: #334155;
+    -fx-pref-height: 1;
+    -fx-max-height: 1;
+}
+
+/* ============================================================
+   PENALTY CARDS
+   ============================================================ */
+
+.penalty-card {
+    -fx-background-color: rgba(239,68,68,0.08);
+    -fx-background-radius: 10;
+    -fx-padding: 18 20 18 20;
+    -fx-border-color: rgba(239,68,68,0.3);
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.no-penalty-card {
+    -fx-background-color: rgba(16,185,129,0.08);
+    -fx-background-radius: 10;
+    -fx-padding: 18 20 18 20;
+    -fx-border-color: rgba(16,185,129,0.3);
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.penalty-amount-label {
+    -fx-text-fill: #ef4444;
+    -fx-font-size: 36px;
+    -fx-font-weight: bold;
+}
+
+.penalty-sublabel {
+    -fx-text-fill: #fca5a5;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.no-penalty-label {
+    -fx-text-fill: #10b981;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+/* ============================================================
+   SUCCESS PANEL
+   ============================================================ */
+
+.success-panel {
+    -fx-background-color: rgba(16,185,129,0.1);
+    -fx-background-radius: 10;
+    -fx-padding: 14 18 14 18;
+    -fx-border-color: rgba(16,185,129,0.3);
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.success-title {
+    -fx-text-fill: #10b981;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.success-info {
+    -fx-text-fill: #475569;
+    -fx-font-size: 13px;
+}
+
+/* ============================================================
+   RESULT CARD (Consulta)
+   ============================================================ */
+
+.result-id-label {
+    -fx-text-fill: #3b82f6;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.info-key {
+    -fx-text-fill: #475569;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.info-value {
+    -fx-text-fill: #f1f5f9;
+    -fx-font-size: 14px;
+}
