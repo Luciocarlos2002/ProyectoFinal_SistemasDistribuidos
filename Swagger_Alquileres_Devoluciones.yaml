@@ -1,0 +1,231 @@
+openapi: 3.0.0
+info:
+  title: Módulo de Alquileres y Devoluciones (Rental POS)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000
+
+paths:
+
+  /api/v1/rentals:
+    post:
+      summary: Crear préstamo
+      tags: [Rentals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inventory_id, customer_id, staff_id]
+              properties:
+                inventory_id:
+                  type: integer
+                  example: 1
+                customer_id:
+                  type: integer
+                  example: 1
+                staff_id:
+                  type: integer
+                  example: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Rental created successfully
+                data:
+                  rental_id: 16122
+                  film_id: 1
+                  film_title: ACADEMY DINOSAUR
+                  rental_date: "2026-06-16T10:00:00"
+                  rental_rate: 0.99
+                  status: ACTIVE
+
+    get:
+      summary: Consultar préstamos
+      tags: [Rentals]
+      parameters:
+        - name: day
+          in: query
+          schema:
+            type: boolean
+          example: true
+        - name: week
+          in: query
+          schema:
+            type: boolean
+          example: false
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Rentals retrieved successfully
+                data:
+                  - rental_id: 16122
+                    customer_id: 1
+                    inventory_id: 2
+                    rental_date: "2026-06-16T10:00:00"
+                    return_date: null
+
+  /api/v1/rentals/{rental_id}:
+    get:
+      summary: Obtener préstamo por ID
+      tags: [Rentals]
+      parameters:
+        - name: rental_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 16122
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Rental retrieved successfully
+                data:
+                  rental_id: 16122
+                  customer_id: 1
+                  inventory_id: 2
+                  rental_date: "2026-06-16T10:00:00"
+                  return_date: null
+                  customer_name: "MARY SMITH"
+
+  /api/v1/rentals/{rental_id}/return:
+    put:
+      summary: Devolver préstamo
+      tags: [Rentals]
+      parameters:
+        - name: rental_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staff_id]
+              properties:
+                staff_id:
+                  type: integer
+                  example: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Rental returned successfully
+                data:
+                  rental_id: 16122
+                  inventory_id: 2
+                  days_late: 2
+                  penalty: 2.0
+                  status: RETURNED
+
+  /api/v1/rentals/{rental_id}/penalty-preview:
+    get:
+      summary: Previsualizar penalidad
+      tags: [Rentals]
+      parameters:
+        - name: rental_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Penalty calculated
+                data:
+                  rental_id: 16122
+                  days_elapsed: 5
+                  days_late: 2
+                  penalty_per_day: 1.0
+                  penalty_amount: 2.0
+
+  /api/v1/rentals/{rental_id}/penalty-payment:
+    post:
+      summary: Pago de penalidad
+      tags: [Rentals]
+      parameters:
+        - name: rental_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staff_id]
+              properties:
+                staff_id:
+                  type: integer
+                  example: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Penalty payment registered
+                data:
+                  rental_id: 16122
+                  penalty_paid: 2.0
+                  status: PAID
+
+  /api/v1/rentals/{rental_id}/cancel:
+    put:
+      summary: Cancelar préstamo
+      tags: [Rentals]
+      parameters:
+        - name: rental_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staff_id]
+              properties:
+                staff_id:
+                  type: integer
+                  example: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example:
+                message: Rental cancelled successfully
+                data:
+                  rental_id: 16122
+                  inventory_id: 2
+                  refund: 5.99
+                  staff_id: 1
+                  status: CANCELLED
