@@ -1,9 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import datetime
 
 from database import get_db_connection
+
+# =============================
+# consume el servicio cliente
+# =============================
+from services.customer_service import (
+    obtener_cliente_por_dni,
+    CustomerException
+)
 
 router = APIRouter(prefix="/api/v1/rentals", tags=["Rentals"])
 
@@ -14,7 +21,7 @@ router = APIRouter(prefix="/api/v1/rentals", tags=["Rentals"])
 
 class CreateRentalRequest(BaseModel):
     inventory_id: int
-    customer_id: int
+    numberDni: str
     staff_id: int
 
 
@@ -28,13 +35,6 @@ class PenaltyPaymentRequest(BaseModel):
 class CancelRentalRequest(BaseModel):
     staff_id: int
 
-# =========================
-# UTIL
-# =========================
-
-def now_peru():
-    return datetime.now(ZoneInfo("America/Lima")).replace(tzinfo=None)
-
 
 # =========================
 # 1. CREATE RENTAL
@@ -43,7 +43,26 @@ def now_peru():
 @router.post("")
 def create_rental(request: CreateRentalRequest):
 
+    try:
+
+        customer = obtener_cliente_por_dni(
+            request.numberDni
+        )
+
+    except CustomerException as ex:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(ex)
+        )
+
+    customer_id = customer["customer_id"]
+
+    full_name = customer["fullName"]
+
     with get_db_connection() as (_, cursor):
+
+        # Verificar inventario
 
         cursor.execute("""
             SELECT inventory_id
@@ -52,31 +71,35 @@ def create_rental(request: CreateRentalRequest):
         """, (request.inventory_id,))
 
         if not cursor.fetchone():
-            raise HTTPException(404, "Inventory not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Inventory not found"
+            )
+
+        # Obtener información de la película
 
         cursor.execute("""
-            SELECT rental_id
-            FROM rental
-            WHERE inventory_id = %s
-              AND return_date IS NULL
-        """, (request.inventory_id,))
-
-        if cursor.fetchone():
-            raise HTTPException(409, "Item already rented")
-
-        cursor.execute("""
-            SELECT f.film_id, f.title, f.rental_duration, f.rental_rate
+            SELECT
+                f.film_id,
+                f.title,
+                f.rental_rate
             FROM inventory i
-            JOIN film f ON f.film_id = i.film_id
+            INNER JOIN film f
+                ON f.film_id = i.film_id
             WHERE i.inventory_id = %s
         """, (request.inventory_id,))
 
         film = cursor.fetchone()
 
         if not film:
-            raise HTTPException(404, "Film not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Film not found"
+            )
 
-        film_id, title, duration, rate = film
+        film_id, title, rental_rate = film
+
+        # Registrar alquiler
 
         cursor.execute("""
             INSERT INTO rental (
@@ -84,44 +107,84 @@ def create_rental(request: CreateRentalRequest):
                 inventory_id,
                 customer_id,
                 staff_id,
-                last_update
+                last_update,
+                status,
+                fullname,
+                title
             )
-            VALUES (NOW(), %s, %s, %s, NOW())
-            RETURNING rental_id, rental_date
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+            )
+            RETURNING
+                rental_id,
+                rental_date,
+                last_update
         """, (
+            datetime.now(),
             request.inventory_id,
-            request.customer_id,
-            request.staff_id
+            customer_id,
+            request.staff_id,
+            datetime.now(),
+            "ALQUILADO",
+            full_name,
+            title
         ))
 
-        rental_id, rental_date = cursor.fetchone()
+        rental_id, rental_date, last_update = cursor.fetchone()
+
+        # Registrar pago
 
         cursor.execute("""
             INSERT INTO payment (
                 customer_id,
+                fullName,
                 staff_id,
                 rental_id,
                 amount,
+                status,
                 payment_date
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+            )
         """, (
-            request.customer_id,
+            customer_id,
+            full_name,
             request.staff_id,
             rental_id,
-            rate,
-            now_peru()
+            rental_rate,
+            "PAGADO",
+            datetime.now()
         ))
 
         return {
-            "message": "Rental created successfully",
+            "status_code": 200,
+            "message": "Alquiler creado con éxito",
             "data": {
                 "rental_id": rental_id,
-                "film_id": film_id,
-                "film_title": title,
+                "inventory_id": request.inventory_id,
+                "title": title,
+                "customer_id": customer_id,
+                "fullName": full_name,
+                "staff_id": request.staff_id,
+                "status": "ALQUILADO",
                 "rental_date": rental_date.isoformat(),
-                "rental_rate": rate,
-                "status": "ACTIVE"
+                "last_update": last_update.isoformat(),
+                "return_date": None,
+                "rental_rate": float(rental_rate)
             }
         }
 
@@ -159,7 +222,8 @@ def penalty_preview(rental_id: int):
         penalty = days_late * 1.00
 
         return {
-            "message": "Penalty calculated",
+            "status_code": 200,
+            "message": "Penalización calculada",
             "data": {
                 "rental_id": rental_id,
                 "days_elapsed": days_elapsed,
@@ -181,45 +245,61 @@ def return_rental(rental_id: int, request: ReturnRentalRequest):
 
         cursor.execute("""
             SELECT
-                r.customer_id,
                 r.inventory_id,
-                r.rental_date,
-                f.rental_duration
+                r.status
             FROM rental r
-            JOIN inventory i ON i.inventory_id = r.inventory_id
-            JOIN film f ON f.film_id = i.film_id
+            JOIN inventory i
+                ON i.inventory_id = r.inventory_id
             WHERE r.rental_id = %s
         """, (rental_id,))
 
         data = cursor.fetchone()
 
         if not data:
-            raise HTTPException(404, "Rental not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Alquiler no encontrado"
+            )
 
-        customer_id, inventory_id, rental_date, duration = data
+        inventory_id, status = data
 
-        days_elapsed = (datetime.utcnow().date() - rental_date.date()).days
-        days_late = max(0, days_elapsed - duration)
+        if status == "RETORNADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler ya fue retornado"
+            )
 
-        penalty = days_late * 1.00
+        if status == "CANCELADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler fue cancelado"
+            )
+
 
         cursor.execute("""
             UPDATE rental
-            SET return_date = NOW(),
-                last_update = NOW()
+            SET
+                return_date = %s,
+                status = %s,
+                last_update = %s
             WHERE rental_id = %s
-        """, (rental_id,))
+        """, (
+            datetime.now(),
+            "RETORNADO",
+            datetime.now(),
+            rental_id
+        ))
 
         return {
-            "message": "Rental returned successfully",
+            "status_code": 200,
+            "message": "El alquiler se devolvió correctamente",
             "data": {
                 "rental_id": rental_id,
                 "inventory_id": inventory_id,
-                "days_late": days_late,
-                "penalty": penalty,
-                "status": "RETURNED"
+                "status": "RETORNADO"
             }
         }
+
 
 
 # =========================
@@ -257,7 +337,7 @@ def penalty_payment(rental_id: int, request: PenaltyPaymentRequest):
 
         if penalty == 0:
             return {
-                "message": "No penalty to pay",
+                "message": "Sin penalización",
                 "data": {
                     "rental_id": rental_id,
                     "penalty": 0.0
@@ -278,73 +358,139 @@ def penalty_payment(rental_id: int, request: PenaltyPaymentRequest):
             request.staff_id,
             rental_id,
             penalty,
-            now_peru()
+            datetime.now()
         ))
 
         return {
-            "message": "Penalty payment registered",
+            "status_code": 200,
+            "message": "Pago de multa registrado",
             "data": {
                 "rental_id": rental_id,
                 "penalty_paid": penalty,
-                "status": "PAID"
+                "status": "PAGADO"
             }
         }
-        
+
+
 # =========================
-# 5. Obtener Renta por filtro(día, semana, cliente)
+# 5. Obtener Renta por filtro(día, semana, numeroDni, status)
 # =========================
 
 @router.get("")
 def get_rentals(
-    customer_id: int = None,
+    numberDni: str | None = None,
+    status: str | None = None,
     day: bool = False,
     week: bool = False
 ):
 
+    VALID_STATUS = {
+        "ALQUILADO",
+        "CANCELADO",
+        "RETORNADO"
+    }
+
+    customer_id = None
+
+    if numberDni:
+
+        try:
+
+            customer = obtener_cliente_por_dni(
+                numberDni
+            )
+
+            customer_id = customer["customer_id"]
+
+        except CustomerException as ex:
+
+            raise HTTPException(
+                status_code=400,
+                detail=str(ex)
+            )
+
+    if status:
+
+        status = status.upper()
+
+        if status not in VALID_STATUS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "status debe ser "
+                    "ALQUILADO, CANCELADO o RETORNADO"
+                )
+            )
+
     with get_db_connection() as (_, cursor):
 
         base_query = """
-            SELECT rental_id, customer_id, inventory_id, rental_date, return_date
+            SELECT
+                rental_id,
+                inventory_id,
+                title,
+                customer_id,
+                fullName,
+                staff_id,
+                status,
+                rental_date,
+                return_date
             FROM rental
             WHERE 1=1
         """
 
         params = []
 
-        # 🔍 por cliente
         if customer_id:
             base_query += " AND customer_id = %s"
             params.append(customer_id)
 
-        # 📅 por día
-        if day:
-            base_query += " AND DATE(rental_date) = CURRENT_DATE"
+        if status:
+            base_query += " AND status = %s"
+            params.append(status)
 
-        # 📅 por semana
+        if day:
+            base_query += """
+                AND DATE(rental_date) = CURRENT_DATE
+            """
+
         if week:
             base_query += """
                 AND rental_date >= CURRENT_DATE - INTERVAL '7 days'
             """
 
-        base_query += " ORDER BY rental_date DESC"
+        base_query += """
+            ORDER BY rental_date DESC
+        """
 
-        cursor.execute(base_query, tuple(params))
+        cursor.execute(
+            base_query,
+            tuple(params)
+        )
+
         rows = cursor.fetchall()
 
+
         return {
-            "message": "Rentals retrieved successfully",
+            "status_code": 200,
+            "message": "Alquileres recuperados con éxito",
             "data": [
                 {
                     "rental_id": r[0],
-                    "customer_id": r[1],
-                    "inventory_id": r[2],
-                    "rental_date": r[3],
-                    "return_date": r[4]
+                    "inventory_id": r[1],
+                    "title": r[2],
+                    "customer_id": r[3],
+                    "fullName": r[4],
+                    "staff_id": r[5],
+                    "status": r[6],
+                    "rental_date": r[7],
+                    "return_date": r[8]
                 }
                 for r in rows
             ]
         }
-        
+
+
 # =========================
 # 6. Obtener Renta por id
 # =========================
@@ -356,35 +502,44 @@ def get_rental(rental_id: int):
 
         cursor.execute("""
             SELECT
-                r.rental_id,
-                r.customer_id,
-                r.inventory_id,
-                r.rental_date,
-                r.return_date,
-                c.first_name,
-                c.last_name
-            FROM rental r
-            JOIN customer c ON c.customer_id = r.customer_id
-            WHERE r.rental_id = %s
+                rental_id,
+                inventory_id,
+                title,
+                customer_id,
+                fullname,
+                staff_id,
+                status,
+                rental_date,
+                return_date
+            FROM rental
+            WHERE rental_id = %s
         """, (rental_id,))
 
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(404, "Rental not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Rental not found"
+            )
 
         return {
-            "message": "Rental retrieved successfully",
+            "status_code": 200,
+            "message": "Alquiler recuperado con éxito",
             "data": {
                 "rental_id": row[0],
-                "customer_id": row[1],
-                "inventory_id": row[2],
-                "rental_date": row[3],
-                "return_date": row[4],
-                "customer_name": f"{row[5]} {row[6]}"
+                "inventory_id": row[1],
+                "title": row[2],
+                "customer_id": row[3],
+                "fullName": row[4],
+                "staff_id": row[5],
+                "status": row[6],
+                "rental_date": row[7].isoformat() if row[7] else None,
+                "return_date": row[8].isoformat() if row[8] else None
             }
         }
-        
+
+
 # =========================
 # 7. Cancelar una renta
 # =========================
@@ -394,9 +549,12 @@ def cancel_rental(rental_id: int, request: CancelRentalRequest):
 
     with get_db_connection() as (conn, cursor):
 
-        # 1. obtener rental
         cursor.execute("""
-            SELECT customer_id, inventory_id, return_date
+            SELECT
+                customer_id,
+                fullname,
+                inventory_id,
+                status
             FROM rental
             WHERE rental_id = %s
         """, (rental_id,))
@@ -404,62 +562,92 @@ def cancel_rental(rental_id: int, request: CancelRentalRequest):
         rental = cursor.fetchone()
 
         if not rental:
-            raise HTTPException(404, "Rental not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Alquiler no encontrado"
+            )
 
-        customer_id, inventory_id, return_date = rental
+        customer_id, fullname, inventory_id, status = rental
 
-        # ❌ no se puede cancelar si ya fue devuelto
-        if return_date:
-            raise HTTPException(400, "Rental already returned, cannot cancel")
+        if status == "CANCELADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler ya fue cancelado"
+            )
 
-        # 2. marcar como cancelado (cerrar rental)
+        if status == "RETORNADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler ya fue retornado"
+            )
+
+        current_date = datetime.now()
+
         cursor.execute("""
             UPDATE rental
-            SET return_date = NOW(),
-                last_update = NOW()
+            SET
+                return_date = %s,
+                status = %s,
+                last_update = %s
             WHERE rental_id = %s
-        """, (rental_id,))
+        """, (
+            current_date,
+            "CANCELADO",
+            current_date,
+            rental_id
+        ))
 
-        # 3. buscar pagos asociados
         cursor.execute("""
-            SELECT payment_id, amount
+            SELECT COALESCE(SUM(amount), 0)
             FROM payment
             WHERE rental_id = %s
         """, (rental_id,))
 
-        payments = cursor.fetchall()
+        total_refund = cursor.fetchone()[0]
 
-        total_refund = sum(p[1] for p in payments)
-
-        # 4. registrar devolución de dinero si aplica
         if total_refund > 0:
 
             cursor.execute("""
                 INSERT INTO payment (
                     customer_id,
+                    fullname,
                     staff_id,
                     rental_id,
                     amount,
-                    payment_date
+                    status,
+                    payment_date,
+                    last_update
                 )
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s
+                )
             """, (
                 customer_id,
+                fullname,
                 request.staff_id,
                 rental_id,
-                -total_refund,
-                now_peru()
+                -abs(total_refund),
+                "REEMBOLSO",
+                current_date,
+                current_date
             ))
 
         conn.commit()
 
         return {
-            "message": "Rental cancelled successfully",
+            "status_code": 200,
+            "message": "Alquiler cancelado con éxito",
             "data": {
                 "rental_id": rental_id,
                 "inventory_id": inventory_id,
-                "refund": total_refund,
-                "staff_id": request.staff_id,
-                "status": "CANCELLED"
+                "status": "CANCELADO",
+                "refund_amount": float(total_refund)
             }
         }
