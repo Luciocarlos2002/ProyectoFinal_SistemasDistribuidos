@@ -12,7 +12,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 public class RentalApiClient {
-    private static final String BASE_URL = "http://localhost:8000/api/v1/rentals";
+    private static final String BASE_URL = "http://34.176.33.216:8000/api/v1/rentals";
     private final HttpClient client;
     private final Gson gson;
 
@@ -33,7 +33,9 @@ public class RentalApiClient {
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        Type type = new TypeToken<ApiResponse<Rental>>(){}.getType();
+        checkError(response);
+        Type type = new TypeToken<ApiResponse<Rental>>() {
+        }.getType();
         return gson.fromJson(response.body(), type);
     }
 
@@ -47,7 +49,9 @@ public class RentalApiClient {
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        Type type = new TypeToken<ApiResponse<ReturnRentalData>>(){}.getType();
+        checkError(response);
+        Type type = new TypeToken<ApiResponse<ReturnRentalData>>() {
+        }.getType();
         return gson.fromJson(response.body(), type);
     }
 
@@ -58,7 +62,9 @@ public class RentalApiClient {
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        Type type = new TypeToken<ApiResponse<PenaltyPreviewData>>(){}.getType();
+        checkError(response);
+        Type type = new TypeToken<ApiResponse<PenaltyPreviewData>>() {
+        }.getType();
         return gson.fromJson(response.body(), type);
     }
 
@@ -69,7 +75,24 @@ public class RentalApiClient {
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        Type type = new TypeToken<ApiResponse<Rental>>(){}.getType();
+        checkError(response);
+        Type type = new TypeToken<ApiResponse<Rental>>() {
+        }.getType();
         return gson.fromJson(response.body(), type);
+    }
+
+    private void checkError(HttpResponse<String> response) throws Exception {
+        if (response.statusCode() >= 400) {
+            String msg = "Error " + response.statusCode();
+            try {
+                java.util.Map map = gson.fromJson(response.body(), java.util.Map.class);
+                if (map != null && map.containsKey("detail")) {
+                    msg = String.valueOf(map.get("detail"));
+                }
+            } catch (Exception ignored) {
+                msg += ": " + response.body();
+            }
+            throw new Exception(msg);
+        }
     }
 }
