@@ -32,6 +32,7 @@ def obtener_inventorys(store_id: int):
         return [
             {
                 "inventory_id": item["inventory_id"],
+                "film_id": item["film_id"],
                 "title": item["title"]
             }
             for item in inventorys["data"]
