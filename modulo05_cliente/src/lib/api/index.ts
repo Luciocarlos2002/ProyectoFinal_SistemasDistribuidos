@@ -138,12 +138,11 @@ export async function createRental(payload: CreateRentalPayload): Promise<Rental
   return toRental(res.data)
 }
 
-// GET /api/v1/rentals?inventory_id=X&status=ALQUILADO
+// GET /api/v1/rentals?status=ALQUILADO, then filter by inventory_id client-side
 export async function getActiveRentalByInventory(inventory_id: number): Promise<Rental | null> {
-  const res = await request<{ data: Array<Record<string, unknown>> }>(
-    `/api/v1/rentals?inventory_id=${inventory_id}&status=ALQUILADO`
-  )
-  return res.data.length > 0 ? toRental(res.data[0]) : null
+  const res = await request<{ data: Array<Record<string, unknown>> }>('/api/v1/rentals?status=ALQUILADO')
+  const found = res.data.find(r => (r.inventory_id as number) === inventory_id)
+  return found ? toRental(found) : null
 }
 
 // GET /api/v1/rentals/{rental_id}/penalty-preview
