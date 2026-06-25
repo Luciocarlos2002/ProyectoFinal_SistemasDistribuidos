@@ -1,6 +1,6 @@
 import requests
 
-API_URL = "http://35.239.247.220:8001/clientes/customer_id"
+API_URL = "http://35.239.247.220:8001/clientes"
 
 class CustomerException(Exception):
     pass
