@@ -15,7 +15,7 @@ def get_db_connection():
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SET search_path TO sakila, public;")
+        cursor.execute("SET search_path TO modulo5, public;")
 
         yield conn, cursor
 

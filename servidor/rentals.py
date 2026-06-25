@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from datetime import datetime
-
 from database import get_db_connection
+
 
 # =============================
 # consume el servicio cliente
@@ -12,17 +12,26 @@ from services.customer_service import (
     CustomerException
 )
 
+
+# =============================
+# consume el servicio login
+# =============================
+from services.auth_service import (
+    login,
+    AuthException
+)
+
+
 router = APIRouter(prefix="/api/v1/rentals", tags=["Rentals"])
 
 
 # =========================
 # DTOs
 # =========================
-
 class CreateRentalRequest(BaseModel):
     inventory_id: int
+    title: str
     customer_id: int
-    staff_id: int
 
 
 class ReturnRentalRequest(BaseModel):
@@ -31,6 +40,7 @@ class ReturnRentalRequest(BaseModel):
 
 class PenaltyPaymentRequest(BaseModel):
     staff_id: int
+
 
 class CancelRentalRequest(BaseModel):
     staff_id: int
@@ -43,6 +53,7 @@ class CancelRentalRequest(BaseModel):
 @router.post("")
 def create_rental(request: CreateRentalRequest):
 
+    # Consumiendo servicio Customer
     try:
 
         customer = obtener_cliente_por_id(
@@ -56,28 +67,28 @@ def create_rental(request: CreateRentalRequest):
             detail=str(ex)
         )
 
-    customer_id = customer["customer_id"]
-
     full_name = customer["fullName"]
+    
+    # Consumiendo servicio Login
+    try:
+        
+        usuario = login(
+            "manager@sakila.com",
+            "manager123"
+            )
+        
+    except AuthException as ex:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(ex)
+        )
+        
+    staff_id = usuario["staff_id"]
 
     with get_db_connection() as (_, cursor):
 
-        # Verificar inventario
-
-        cursor.execute("""
-            SELECT inventory_id
-            FROM inventory
-            WHERE inventory_id = %s
-        """, (request.inventory_id,))
-
-        if not cursor.fetchone():
-            raise HTTPException(
-                status_code=404,
-                detail="Inventory not found"
-            )
-
         # Obtener información de la película
-
         cursor.execute("""
             SELECT
                 f.film_id,
@@ -94,23 +105,22 @@ def create_rental(request: CreateRentalRequest):
         if not film:
             raise HTTPException(
                 status_code=404,
-                detail="Film not found"
+                detail="Pelicula no encontrada"
             )
 
-        film_id, title, rental_rate = film
+        rental_rate = film
 
         # Registrar alquiler
-
         cursor.execute("""
             INSERT INTO rental (
-                rental_date,
                 inventory_id,
+                title,
                 customer_id,
-                staff_id,
-                last_update,
-                status,
                 fullname,
-                title
+                staff_id,
+                status,
+                rental_date,
+                last_update
             )
             VALUES (
                 %s,
@@ -124,32 +134,33 @@ def create_rental(request: CreateRentalRequest):
             )
             RETURNING
                 rental_id,
+                status,
                 rental_date,
                 last_update
         """, (
-            datetime.now(),
             request.inventory_id,
-            customer_id,
-            request.staff_id,
-            datetime.now(),
-            "ALQUILADO",
+            request.title,
+            request.customer_id,
             full_name,
-            title
+            staff_id,
+            "ALQUILADO",
+            datetime.now(),
+            datetime.now()
         ))
 
-        rental_id, rental_date, last_update = cursor.fetchone()
+        rental_id, status, rental_date, last_update = cursor.fetchone()
 
         # Registrar pago
-
         cursor.execute("""
             INSERT INTO payment (
                 customer_id,
-                fullName,
+                fullname,
                 staff_id,
                 rental_id,
                 amount,
                 status,
-                payment_date
+                payment_date,
+                last_update
             )
             VALUES (
                 %s,
@@ -161,12 +172,13 @@ def create_rental(request: CreateRentalRequest):
                 %s
             )
         """, (
-            customer_id,
+            request.customer_id,
             full_name,
-            request.staff_id,
+            staff_id,
             rental_id,
             rental_rate,
             "PAGADO",
+            datetime.now(),
             datetime.now()
         ))
 
@@ -176,15 +188,14 @@ def create_rental(request: CreateRentalRequest):
             "data": {
                 "rental_id": rental_id,
                 "inventory_id": request.inventory_id,
-                "title": title,
-                "customer_id": customer_id,
+                "title": request.title,
+                "customer_id": request.customer_id,
                 "fullName": full_name,
-                "staff_id": request.staff_id,
-                "status": "ALQUILADO",
+                "staff_id": staff_id,
+                "status": status,
                 "rental_date": rental_date.isoformat(),
                 "last_update": last_update.isoformat(),
-                "return_date": None,
-                "rental_rate": float(rental_rate)
+                "return_date": None
             }
         }
 
@@ -212,7 +223,7 @@ def penalty_preview(rental_id: int):
         data = cursor.fetchone()
 
         if not data:
-            raise HTTPException(404, "Rental not found")
+            raise HTTPException(404, "Alquiler no encontrado")
 
         rental_id, rental_date, duration = data
 
