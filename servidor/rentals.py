@@ -8,7 +8,7 @@ from database import get_db_connection
 # consume el servicio cliente
 # =============================
 from services.customer_service import (
-    obtener_cliente_por_dni,
+    obtener_cliente_por_id,
     CustomerException
 )
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/rentals", tags=["Rentals"])
 
 class CreateRentalRequest(BaseModel):
     inventory_id: int
-    numberDni: str
+    customer_id: int
     staff_id: int
 
 
@@ -45,8 +45,8 @@ def create_rental(request: CreateRentalRequest):
 
     try:
 
-        customer = obtener_cliente_por_dni(
-            request.numberDni
+        customer = obtener_cliente_por_id(
+            request.customer_id
         )
 
     except CustomerException as ex:
@@ -378,7 +378,7 @@ def penalty_payment(rental_id: int, request: PenaltyPaymentRequest):
 
 @router.get("")
 def get_rentals(
-    numberDni: str | None = None,
+    customer_id: int | None = None,
     status: str | None = None,
     day: bool = False,
     week: bool = False
@@ -392,12 +392,12 @@ def get_rentals(
 
     customer_id = None
 
-    if numberDni:
+    if customer_id:
 
         try:
 
-            customer = obtener_cliente_por_dni(
-                numberDni
+            customer = obtener_cliente_por_id(
+                customer_id
             )
 
             customer_id = customer["customer_id"]

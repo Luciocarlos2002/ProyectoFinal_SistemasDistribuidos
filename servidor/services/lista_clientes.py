@@ -1,38 +1,34 @@
 import requests
 
-API_URL = "http://35.239.247.220:8001/clientes/customer_id"
+API_URL = "http://35.239.247.220:8001/clientes?estado=activo&por_pagina=100&pagina=1"
 
 class CustomerException(Exception):
     pass
 
-def obtener_cliente_por_id(customer_id):
+def obtener_clientes_activos():
     try:
         response = requests.get(
-            f"{API_URL}/{customer_id}",
+            API_URL,
             timeout=5
         )
 
-        # Servicio respondió pero con error
         if response.status_code != 200:
             raise CustomerException(
-                "No se pudo obtener la información del cliente."
+                "No se pudo obtener la lista de clientes."
             )
 
-        cliente = response.json()
+        data = response.json()
 
-        # Validar estado
-        estado = cliente.get("estado", "").lower()
+        clientes = []
 
-        if estado == "inactivo":
-            raise CustomerException(
-                "El cliente se encuentra inactivo y no puede realizar alquileres."
-            )
+        for cliente in data.get("items", []):
+            clientes.append({
+                "customer_id": cliente["customer_id"],
+                "nombre": cliente["nombre"],
+                "apellido": cliente["apellido"]
+            })
 
-        return {
-            "customer_id": cliente["customer_id"],
-            "fullName": f"{cliente['nombre']} {cliente['apellido']}",
-            "data": cliente
-        }
+        return clientes
 
     except requests.exceptions.ConnectionError:
         raise CustomerException(
