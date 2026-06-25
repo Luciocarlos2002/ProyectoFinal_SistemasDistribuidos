@@ -41,6 +41,10 @@ public class RentalTab {
         customerField.setPromptText("Ej: 5");
         customerField.setMaxWidth(Double.MAX_VALUE);
 
+        TextField dniField = new TextField();
+        dniField.setPromptText("Ej: 71234567");
+        dniField.setMaxWidth(Double.MAX_VALUE);
+
         TextField staffField = new TextField("1");
         staffField.setMaxWidth(Double.MAX_VALUE);
 
@@ -58,6 +62,7 @@ public class RentalTab {
         formCard.getChildren().addAll(
             createFieldGroup("ID DE INVENTARIO", inventoryField),
             createFieldGroup("ID DE CLIENTE", customerField),
+            createFieldGroup("DNI DEL CLIENTE", dniField),
             createFieldGroup("ID DE STAFF", staffField),
             divider,
             submitBtn
@@ -89,9 +94,10 @@ public class RentalTab {
                 int invId   = Integer.parseInt(inventoryField.getText().trim());
                 int custId  = Integer.parseInt(customerField.getText().trim());
                 int staffId = Integer.parseInt(staffField.getText().trim());
+                String dni  = dniField.getText().trim();
 
                 ApiResponse<Rental> response = apiClient.createRental(
-                    new CreateRentalRequest(invId, custId, staffId)
+                    new CreateRentalRequest(invId, custId, staffId, dni)
                 );
 
                 if (response != null && response.getData() != null) {
@@ -104,6 +110,7 @@ public class RentalTab {
                     successPanel.setManaged(true);
                     inventoryField.clear();
                     customerField.clear();
+                    dniField.clear();
                 } else {
                     showAlert(Alert.AlertType.ERROR, "Error", "No se pudo registrar la renta.");
                 }
