@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Archivos de configuración de IDEs
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Target específico del cliente
+ProyectoFinal_SistemasDistribuidos/cliente/target/
+
+# Si quieres ignorar cualquier target del proyecto
+target/
