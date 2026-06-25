@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 from database import get_db_connection
 
@@ -378,8 +379,9 @@ def penalty_payment(rental_id: int, request: PenaltyPaymentRequest):
 
 @router.get("")
 def get_rentals(
-    customer_id: int | None = None,
-    status: str | None = None,
+    customer_id: Optional[int] = None,
+    inventory_id: Optional[int] = None,
+    status: Optional[str] = None,
     day: bool = False,
     week: bool = False
 ):
@@ -389,8 +391,6 @@ def get_rentals(
         "CANCELADO",
         "RETORNADO"
     }
-
-    customer_id = None
 
     if customer_id:
 
@@ -444,6 +444,10 @@ def get_rentals(
         if customer_id:
             base_query += " AND customer_id = %s"
             params.append(customer_id)
+
+        if inventory_id:
+            base_query += " AND inventory_id = %s"
+            params.append(inventory_id)
 
         if status:
             base_query += " AND status = %s"

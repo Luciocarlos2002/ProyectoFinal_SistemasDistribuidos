@@ -2,137 +2,209 @@ import type {
   Staff, Customer, InventoryItem, Rental, PenaltyPreview,
   CreateRentalPayload, ReturnRentalPayload, RentalsFilter,
 } from './types'
-import { currentStaff, customers, inventory, rentals } from './mockData'
+import { currentStaff } from './mockData'
 
-const delay = (ms = 700) => new Promise<void>(r => setTimeout(r, ms))
+const BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000'
+
+const TO_STATUS: Record<string, Rental['status']> = {
+  ALQUILADO: 'ACTIVE',
+  RETORNADO: 'RETURNED',
+  CANCELADO: 'CANCELLED',
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  })
+  if (!res.ok) {
+    let message = `Error ${res.status}`
+    try {
+      const body = await res.json()
+      message = typeof body?.detail === 'string'
+        ? body.detail
+        : JSON.stringify(body?.detail ?? body)
+    } catch { /* ignore */ }
+    throw new Error(message)
+  }
+  return res.json() as Promise<T>
+}
+
+function toRental(r: Record<string, unknown>): Rental {
+  return {
+    rental_id:     r.rental_id as number,
+    customer_id:   r.customer_id as number,
+    customer_name: ((r.fullName ?? r.fullname ?? '') as string),
+    film_title:    (r.title as string) ?? '',
+    inventory_id:  r.inventory_id as number,
+    rental_date:   r.rental_date as string,
+    return_date:   (r.return_date as string | null) ?? null,
+    status:        TO_STATUS[r.status as string] ?? 'ACTIVE',
+    rental_rate:   (r.rental_rate as number) ?? 0,
+  }
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// GET /api/v1/auth/me
+// No /me endpoint — staff comes from local config
 export async function getMe(): Promise<Staff> {
-  await delay()
   return currentStaff
 }
 
 // ── Customers ─────────────────────────────────────────────────────────────────
-// GET /api/v1/customers?name=&store_id=&active=
+// GET /customers → {total, items: [{customer_id, nombre, apellido}]}
 export async function searchCustomers(name: string): Promise<Customer[]> {
-  await delay()
+  const { items } = await request<{
+    total: number
+    items: Array<{ customer_id: number; nombre: string; apellido: string }>
+  }>('/customers')
   const q = name.toLowerCase().trim()
-  return customers.filter(c => c.name.toLowerCase().includes(q) && c.active)
+  return items
+    .map(c => ({
+      customer_id: c.customer_id,
+      name: `${c.nombre} ${c.apellido}`,
+      email: '',
+      store_id: 1,
+      active: true,
+      has_debt: false,
+    }))
+    .filter(c => !q || c.name.toLowerCase().includes(q))
 }
 
-// GET /api/v1/customers/{customer_id}
 export async function getCustomerById(customer_id: number): Promise<Customer | null> {
-  await delay()
-  return customers.find(c => c.customer_id === customer_id) ?? null
+  const { items } = await request<{
+    total: number
+    items: Array<{ customer_id: number; nombre: string; apellido: string }>
+  }>('/customers')
+  const c = items.find(i => i.customer_id === customer_id)
+  if (!c) return null
+  return {
+    customer_id: c.customer_id,
+    name: `${c.nombre} ${c.apellido}`,
+    email: '',
+    store_id: 1,
+    active: true,
+    has_debt: false,
+  }
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
-// GET /api/v1/inventory/{inventory_id}
-export async function getInventoryItem(inventory_id: number): Promise<InventoryItem | null> {
-  await delay()
-  return inventory.find(i => i.inventory_id === inventory_id) ?? null
+// GET /inventorys?store_id=1 → {total, items: [{inventory_id, title}]}
+// Only available items appear in this list; absent = checked out or doesn't exist
+export async function getAllInventoryItems(): Promise<InventoryItem[]> {
+  const { items } = await request<{
+    total: number
+    items: Array<{ inventory_id: number; title: string }>
+  }>('/inventorys?store_id=1')
+  return items.map(i => ({
+    inventory_id: i.inventory_id,
+    film_id: 0,
+    film_title: i.title,
+    store_id: 1,
+    store_name: 'Tienda 1',
+    rental_rate: 0,
+    available: true,
+  }))
 }
 
-// GET /api/v1/inventory/{inventory_id}/availability
+export async function getInventoryItem(inventory_id: number): Promise<InventoryItem | null> {
+  const { items } = await request<{
+    total: number
+    items: Array<{ inventory_id: number; title: string }>
+  }>('/inventorys?store_id=1')
+  const found = items.find(i => i.inventory_id === inventory_id)
+  return {
+    inventory_id,
+    film_id: 0,
+    film_title: found?.title ?? '—',
+    store_id: 1,
+    store_name: 'Tienda 1',
+    rental_rate: 0,
+    available: !!found,
+  }
+}
+
 export async function getInventoryAvailability(inventory_id: number): Promise<{ available: boolean } | null> {
-  await delay()
-  const item = inventory.find(i => i.inventory_id === inventory_id)
-  if (!item) return null
-  return { available: item.available }
+  const item = await getInventoryItem(inventory_id)
+  return item ? { available: item.available } : null
 }
 
 // ── Rentals ───────────────────────────────────────────────────────────────────
 // POST /api/v1/rentals
 export async function createRental(payload: CreateRentalPayload): Promise<Rental> {
-  await delay(800)
-  const item = inventory.find(i => i.inventory_id === payload.inventory_id)
-  const customer = customers.find(c => c.customer_id === payload.customer_id)
-  if (!item || !customer) throw new Error('Inventario o cliente no encontrado')
-  const newRental: Rental = {
-    rental_id: 16122 + rentals.length + 1,
-    customer_id: customer.customer_id,
-    customer_name: customer.name,
-    film_title: item.film_title,
-    inventory_id: item.inventory_id,
-    rental_date: new Date().toISOString(),
-    return_date: null,
-    status: 'ACTIVE',
-    rental_rate: item.rental_rate,
-  }
-  rentals.unshift(newRental)
-  item.available = false
-  return newRental
+  const res = await request<{ data: Record<string, unknown> }>('/api/v1/rentals', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return toRental(res.data)
 }
 
-// GET /api/v1/rentals/active/by-inventory/{inventory_id}
+// GET /api/v1/rentals?inventory_id=X&status=ALQUILADO
 export async function getActiveRentalByInventory(inventory_id: number): Promise<Rental | null> {
-  await delay()
-  return rentals.find(r => r.inventory_id === inventory_id && r.status === 'ACTIVE') ?? null
+  const res = await request<{ data: Array<Record<string, unknown>> }>(
+    `/api/v1/rentals?inventory_id=${inventory_id}&status=ALQUILADO`
+  )
+  return res.data.length > 0 ? toRental(res.data[0]) : null
 }
 
 // GET /api/v1/rentals/{rental_id}/penalty-preview
 export async function getPenaltyPreview(rental_id: number): Promise<PenaltyPreview | null> {
-  await delay()
-  const rental = rentals.find(r => r.rental_id === rental_id)
-  if (!rental || rental.status !== 'ACTIVE') return null
-  // rental 16119 is overdue by 2 days
-  if (rental_id === 16119) {
-    return { rental_id, days_elapsed: 5, days_late: 2, penalty_per_day: 1.0, penalty_amount: 2.0 }
+  try {
+    const res = await request<{ data: PenaltyPreview }>(`/api/v1/rentals/${rental_id}/penalty-preview`)
+    return res.data
+  } catch {
+    return null
   }
-  const rentalMs = Date.now() - new Date(rental.rental_date).getTime()
-  const daysElapsed = Math.floor(rentalMs / 86_400_000)
-  const daysLate = Math.max(0, daysElapsed - 3)
-  const penaltyPerDay = rental.rental_rate
-  return { rental_id, days_elapsed: daysElapsed, days_late: daysLate, penalty_per_day: penaltyPerDay, penalty_amount: daysLate * penaltyPerDay }
 }
 
-// PUT /api/v1/rentals/{rental_id}/return
-export async function returnRental(rental_id: number, _payload: ReturnRentalPayload): Promise<Rental> {
-  await delay(800)
-  const rental = rentals.find(r => r.rental_id === rental_id)
-  if (!rental) throw new Error('Renta no encontrada')
-  rental.status = 'RETURNED'
-  rental.return_date = new Date().toISOString()
-  const item = inventory.find(i => i.inventory_id === rental.inventory_id)
-  if (item) item.available = true
-  // TODO: integrate POST /api/v1/payments (Finanzas module) here for penalty charging
-  return { ...rental }
+// PUT /api/v1/rentals/{rental_id}/return  +  POST /penalty-payment (if penalty > 0)
+export async function returnRental(rental_id: number, payload: ReturnRentalPayload): Promise<Rental> {
+  await request(`/api/v1/rentals/${rental_id}/return`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+  // register penalty charge — endpoint handles the no-penalty case gracefully
+  await request(`/api/v1/rentals/${rental_id}/penalty-payment`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }).catch(() => { /* safe to ignore: penalty calc after return is best-effort */ })
+  const updated = await getRentalById(rental_id)
+  if (!updated) throw new Error('No se pudo obtener la renta actualizada')
+  return updated
 }
 
-// GET /api/v1/rentals — with filters
+// GET /api/v1/rentals
 export async function getRentals(filters: RentalsFilter = {}): Promise<Rental[]> {
-  await delay()
-  let result = [...rentals]
-  if (filters.day) {
-    const today = new Date().toDateString()
-    result = result.filter(r => new Date(r.rental_date).toDateString() === today)
-  } else if (filters.week) {
-    const weekAgo = Date.now() - 7 * 86_400_000
-    result = result.filter(r => new Date(r.rental_date).getTime() >= weekAgo)
-  }
-  if (filters.customer_id) {
-    result = result.filter(r => r.customer_id === filters.customer_id)
-  }
   if (filters.rental_id) {
-    result = result.filter(r => r.rental_id === filters.rental_id)
+    const r = await getRentalById(filters.rental_id)
+    return r ? [r] : []
   }
-  return result
+  const params = new URLSearchParams()
+  if (filters.day)         params.set('day', 'true')
+  if (filters.week)        params.set('week', 'true')
+  if (filters.customer_id) params.set('customer_id', String(filters.customer_id))
+  const qs = params.toString()
+  const path = qs ? `/api/v1/rentals?${qs}` : '/api/v1/rentals'
+  const res = await request<{ data: Array<Record<string, unknown>> }>(path)
+  return res.data.map(toRental)
 }
 
 // GET /api/v1/rentals/{rental_id}
 export async function getRentalById(rental_id: number): Promise<Rental | null> {
-  await delay()
-  return rentals.find(r => r.rental_id === rental_id) ?? null
+  try {
+    const res = await request<{ data: Record<string, unknown> }>(`/api/v1/rentals/${rental_id}`)
+    return toRental(res.data)
+  } catch {
+    return null
+  }
 }
 
 // PUT /api/v1/rentals/{rental_id}/cancel
 export async function cancelRental(rental_id: number): Promise<Rental> {
-  await delay(800)
-  const rental = rentals.find(r => r.rental_id === rental_id)
-  if (!rental) throw new Error('Renta no encontrada')
-  rental.status = 'CANCELLED'
-  const item = inventory.find(i => i.inventory_id === rental.inventory_id)
-  if (item) item.available = true
-  return { ...rental }
+  await request(`/api/v1/rentals/${rental_id}/cancel`, {
+    method: 'PUT',
+    body: JSON.stringify({ staff_id: currentStaff.staff_id }),
+  })
+  const updated = await getRentalById(rental_id)
+  if (!updated) throw new Error('No se pudo obtener la renta actualizada')
+  return updated
 }

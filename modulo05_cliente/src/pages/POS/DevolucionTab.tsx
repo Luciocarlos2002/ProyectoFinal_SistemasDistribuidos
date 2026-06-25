@@ -21,7 +21,7 @@ export default function DevolucionTab() {
   const [done, setDone] = useState(false)
 
   async function handleSearch() {
-    const id = parseInt(inventoryId)
+    const id = Number.parseInt(inventoryId)
     if (!id) return
     setSearchLoading(true)
     setActiveRental(null)
@@ -31,14 +31,13 @@ export default function DevolucionTab() {
     setDone(false)
     try {
       const rental = await api.getActiveRentalByInventory(id)
-      if (!rental) {
-        setSearchError('No hay un préstamo activo para este ejemplar.')
-      } else {
+      if (rental) {
         setActiveRental(rental)
-        // auto-load penalty
         const p = await api.getPenaltyPreview(rental.rental_id)
         setPenalty(p)
         setPenaltyLoaded(true)
+      } else {
+        setSearchError('No hay un préstamo activo para este ejemplar.')
       }
     } finally {
       setSearchLoading(false)
@@ -73,6 +72,12 @@ export default function DevolucionTab() {
 
   const step1Done = !!activeRental
   const step2Done = penaltyLoaded
+
+  function step2State() {
+    if (step2Done) return 'completed'
+    if (step1Done) return 'active'
+    return 'idle' as const
+  }
 
   return (
     <div className="max-w-xl space-y-4">
@@ -136,7 +141,7 @@ export default function DevolucionTab() {
       </StepCard>
 
       {/* Step 2: Penalty */}
-      <StepCard step={2} title="Penalidad" state={step2Done ? 'completed' : step1Done ? 'active' : 'idle'}>
+      <StepCard step={2} title="Penalidad" state={step2State()}>
         {!step1Done && <p className="text-sm text-slate-400">Busca el préstamo activo primero.</p>}
         {step1Done && !penaltyLoaded && searchLoading && <Skeleton className="h-24 w-full rounded-lg" />}
         {penaltyLoaded && penalty !== null && (
