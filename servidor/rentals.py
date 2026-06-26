@@ -45,11 +45,6 @@ class CreateRentalRequest(BaseModel):
     customer_id: int
     full_name: str
 
-
-class ReturnRentalRequest(BaseModel):
-    staff_id: int
-
-
 class PenaltyPaymentRequest(BaseModel):
     staff_id: int
 
@@ -246,7 +241,7 @@ def penalty_preview(rental_id: int):
 # =========================
 
 @router.put("/{rental_id}/return")
-def return_rental(rental_id: int, request: ReturnRentalRequest):
+def return_rental(rental_id: int):
 
     with get_db_connection() as (_, cursor):
 
@@ -386,6 +381,8 @@ def penalty_payment(rental_id: int, request: PenaltyPaymentRequest):
 @router.get("")
 def get_rentals(
     customer_id: Optional[int] = None,
+    inventory_id: Optional[int] = None,
+    category_name: Optional[str] = None,
     status: Optional[str] = None,
     day: bool = False,
     week: bool = False
@@ -450,6 +447,14 @@ def get_rentals(
         if customer_id:
             base_query += " AND customer_id = %s"
             params.append(customer_id)
+            
+        if inventory_id:
+            base_query += " AND inventory_id = %s"
+            params.append(inventory_id)
+            
+        if category_name:
+            base_query += " AND category_name = %s"
+            params.append(category_name)
 
         if status:
             base_query += " AND status = %s"
@@ -514,7 +519,6 @@ def get_rental(rental_id: int):
                 title,
                 customer_id,
                 fullname,
-                staff_id,
                 status,
                 rental_date,
                 return_date
@@ -539,10 +543,9 @@ def get_rental(rental_id: int):
                 "title": row[2],
                 "customer_id": row[3],
                 "fullName": row[4],
-                "staff_id": row[5],
-                "status": row[6],
-                "rental_date": row[7].isoformat() if row[7] else None,
-                "return_date": row[8].isoformat() if row[8] else None
+                "status": row[5],
+                "rental_date": row[6].isoformat() if row[7] else None,
+                "return_date": row[7].isoformat() if row[8] else None
             }
         }
 
