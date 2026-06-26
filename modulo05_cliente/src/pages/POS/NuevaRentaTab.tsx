@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import StepCard from '@/components/StepCard'
 import { Skeleton } from '@/components/Skeleton'
@@ -12,12 +12,16 @@ import InventorySearch from './InventorySearch'
 export default function NuevaRentaTab() {
   const [allCustomers, setAllCustomers] = useState<Customer[]>([])
   const [customerLoading, setCustomerLoading] = useState(true)
+  const [customerError, setCustomerError] = useState<string | null>(null)
+  const [customerRetry, setCustomerRetry] = useState(0)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const [selectedStore, setSelectedStore] = useState<1 | 2>(1)
 
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([])
   const [inventoryLoading, setInventoryLoading] = useState(true)
+  const [inventoryError, setInventoryError] = useState<string | null>(null)
+  const [inventoryRetry, setInventoryRetry] = useState(0)
   const [selectedInventory, setSelectedInventory] = useState<InventoryItem | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
@@ -34,14 +38,23 @@ export default function NuevaRentaTab() {
   }
 
   useEffect(() => {
-    api.searchCustomers('').then(setAllCustomers).finally(() => setCustomerLoading(false))
-  }, [])
+    setCustomerLoading(true)
+    setCustomerError(null)
+    api.searchCustomers('')
+      .then(setAllCustomers)
+      .catch(e => setCustomerError(e instanceof Error ? e.message : 'Error al cargar clientes'))
+      .finally(() => setCustomerLoading(false))
+  }, [customerRetry])
 
   useEffect(() => {
     setInventoryLoading(true)
+    setInventoryError(null)
     setSelectedInventory(null)
-    api.getAllInventoryItems(selectedStore).then(setAllInventory).finally(() => setInventoryLoading(false))
-  }, [selectedStore])
+    api.getAllInventoryItems(selectedStore)
+      .then(setAllInventory)
+      .catch(e => setInventoryError(e instanceof Error ? e.message : 'Error al cargar inventario'))
+      .finally(() => setInventoryLoading(false))
+  }, [selectedStore, inventoryRetry])
 
   async function handleSubmit() {
     if (!selectedCustomer || !selectedInventory) return
@@ -63,6 +76,45 @@ export default function NuevaRentaTab() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function serviceErrorBanner(message: string, label: string, onRetry: () => void) {
+    return (
+      <div className="mt-2 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm">
+        <AlertCircle size={15} className="text-rose-500 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-rose-700">{label}</p>
+          <p className="text-rose-600 mt-0.5 break-words">{message}</p>
+        </div>
+        <button
+          onClick={onRetry}
+          className="text-rose-600 hover:text-rose-800 text-xs font-semibold underline shrink-0"
+        >
+          Reintentar
+        </button>
+      </div>
+    )
+  }
+
+  function inventoryStepContent() {
+    if (inventoryLoading) return <Skeleton className="h-10 w-full rounded-lg" />
+    if (inventoryError) {
+      return serviceErrorBanner(
+        inventoryError,
+        'Servicio de inventario no disponible',
+        () => setInventoryRetry(n => n + 1),
+      )
+    }
+    return (
+      <InventorySearch
+        items={allInventory}
+        loading={inventoryLoading}
+        selected={selectedInventory}
+        onSelect={setSelectedInventory}
+        onClear={() => setSelectedInventory(null)}
+        disabled={!step1Done}
+      />
+    )
   }
 
   return (
@@ -109,21 +161,15 @@ export default function NuevaRentaTab() {
           onSelect={setSelectedCustomer}
           onClear={() => setSelectedCustomer(null)}
         />
+        {customerError && serviceErrorBanner(
+          customerError,
+          'Servicio de clientes no disponible',
+          () => setCustomerRetry(n => n + 1),
+        )}
       </StepCard>
 
       <StepCard step={2} title="Número de ejemplar" state={step2State()}>
-        {inventoryLoading ? (
-          <Skeleton className="h-10 w-full rounded-lg" />
-        ) : (
-          <InventorySearch
-            items={allInventory}
-            loading={inventoryLoading}
-            selected={selectedInventory}
-            onSelect={setSelectedInventory}
-            onClear={() => setSelectedInventory(null)}
-            disabled={!step1Done}
-          />
-        )}
+        {inventoryStepContent()}
       </StepCard>
 
       <StepCard step={3} title="Confirmar préstamo" state={canSubmit ? 'active' : 'idle'}>

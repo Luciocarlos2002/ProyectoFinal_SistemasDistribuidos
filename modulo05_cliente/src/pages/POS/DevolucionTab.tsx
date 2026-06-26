@@ -39,6 +39,8 @@ export default function DevolucionTab() {
       } else {
         setSearchError('No hay un préstamo activo para este ejemplar.')
       }
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : 'Error al consultar el préstamo')
     } finally {
       setSearchLoading(false)
     }
