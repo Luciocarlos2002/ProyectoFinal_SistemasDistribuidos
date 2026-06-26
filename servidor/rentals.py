@@ -43,6 +43,7 @@ class CreateRentalRequest(BaseModel):
     film_id: int
     title: str
     customer_id: int
+    full_name: str
 
 
 class ReturnRentalRequest(BaseModel):
@@ -62,22 +63,6 @@ class CancelRentalRequest(BaseModel):
 
 @router.post("")
 def create_rental(request: CreateRentalRequest):
-
-    # Consumiendo servicio Customer
-    try:
-
-        customer = obtener_cliente_por_id(
-            request.customer_id
-        )
-
-    except CustomerException as ex:
-
-        raise HTTPException(
-            status_code=400,
-            detail=str(ex)
-        )
-
-    full_name = customer["fullName"]
     
     # Consumiendo servicio Login
     try:
@@ -110,7 +95,7 @@ def create_rental(request: CreateRentalRequest):
             detail=str(ex)
         )
         
-    rental_rate = film["rental_rate"],
+    rental_rate = film["rental_rate"]
     category_name = film["category_name"]
         
     # Conexion a la BD y registrar alquiler y pagos
@@ -149,7 +134,7 @@ def create_rental(request: CreateRentalRequest):
             request.inventory_id,
             request.title,
             request.customer_id,
-            full_name,
+            request.full_name,
             staff_id,
             category_name,
             "ALQUILADO",
@@ -183,7 +168,7 @@ def create_rental(request: CreateRentalRequest):
             )
         """, (
             request.customer_id,
-            full_name,
+            request.full_name,
             staff_id,
             rental_id,
             rental_rate,
@@ -200,9 +185,10 @@ def create_rental(request: CreateRentalRequest):
                 "inventory_id": request.inventory_id,
                 "title": request.title,
                 "customer_id": request.customer_id,
-                "fullName": full_name,
+                "fullName": request.full_name,
                 "staff_id": staff_id,
                 "status": status,
+                "rental_rate": rental_rate,
                 "rental_date": rental_date.isoformat(),
                 "last_update": last_update.isoformat(),
                 "return_date": None
@@ -451,6 +437,7 @@ def get_rentals(
                 customer_id,
                 fullName,
                 staff_id,
+                category_name,
                 status,
                 rental_date,
                 return_date
@@ -470,7 +457,7 @@ def get_rentals(
 
         if day:
             base_query += """
-                AND DATE(rental_date) = CURRENT_DATE
+                AND rental_date >= NOW() - INTERVAL '1 day'
             """
 
         if week:
@@ -501,9 +488,10 @@ def get_rentals(
                     "customer_id": r[3],
                     "fullName": r[4],
                     "staff_id": r[5],
-                    "status": r[6],
-                    "rental_date": r[7],
-                    "return_date": r[8]
+                    "category_name": r[6],
+                    "status": r[7],
+                    "rental_date": r[8],
+                    "return_date": r[9]
                 }
                 for r in rows
             ]
