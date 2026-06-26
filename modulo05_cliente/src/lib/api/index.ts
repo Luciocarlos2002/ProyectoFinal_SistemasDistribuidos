@@ -1,9 +1,7 @@
 import type {
-  Staff, Customer, InventoryItem, Rental, PenaltyPreview,
+  Customer, InventoryItem, Rental, PenaltyPreview,
   CreateRentalPayload, ReturnRentalPayload, RentalsFilter,
 } from './types'
-import { currentStaff } from './mockData'
-
 const BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000'
 
 const TO_STATUS: Record<string, Rental['status']> = {
@@ -42,12 +40,6 @@ function toRental(r: Record<string, unknown>): Rental {
     status:        TO_STATUS[r.status as string] ?? 'ACTIVE',
     rental_rate:   (r.rental_rate as number) ?? 0,
   }
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-// No /me endpoint — staff comes from local config
-export async function getMe(): Promise<Staff> {
-  return currentStaff
 }
 
 // ── Customers ─────────────────────────────────────────────────────────────────
@@ -140,11 +132,12 @@ export async function createRental(payload: CreateRentalPayload): Promise<Rental
   return toRental(res.data)
 }
 
-// GET /api/v1/rentals?status=ALQUILADO, then filter by inventory_id client-side
+// GET /api/v1/rentals?status=ALQUILADO&inventory_id=N
 export async function getActiveRentalByInventory(inventory_id: number): Promise<Rental | null> {
-  const res = await request<{ data: Array<Record<string, unknown>> }>('/api/v1/rentals?status=ALQUILADO')
-  const found = res.data.find(r => (r.inventory_id as number) === inventory_id)
-  return found ? toRental(found) : null
+  const res = await request<{ data: Array<Record<string, unknown>> }>(
+    `/api/v1/rentals?status=ALQUILADO&inventory_id=${inventory_id}`
+  )
+  return res.data.length > 0 ? toRental(res.data[0]) : null
 }
 
 // GET /api/v1/rentals/{rental_id}/penalty-preview
@@ -161,7 +154,6 @@ export async function getPenaltyPreview(rental_id: number): Promise<PenaltyPrevi
 export async function returnRental(rental_id: number, payload: ReturnRentalPayload): Promise<Rental> {
   await request(`/api/v1/rentals/${rental_id}/return`, {
     method: 'PUT',
-    body: JSON.stringify(payload),
   })
   // register penalty charge — endpoint handles the no-penalty case gracefully
   await request(`/api/v1/rentals/${rental_id}/penalty-payment`, {
@@ -200,10 +192,10 @@ export async function getRentalById(rental_id: number): Promise<Rental | null> {
 }
 
 // PUT /api/v1/rentals/{rental_id}/cancel
-export async function cancelRental(rental_id: number): Promise<Rental> {
+export async function cancelRental(rental_id: number, staffId: number): Promise<Rental> {
   await request(`/api/v1/rentals/${rental_id}/cancel`, {
     method: 'PUT',
-    body: JSON.stringify({ staff_id: currentStaff.staff_id }),
+    body: JSON.stringify({ staff_id: staffId }),
   })
   const updated = await getRentalById(rental_id)
   if (!updated) throw new Error('No se pudo obtener la renta actualizada')

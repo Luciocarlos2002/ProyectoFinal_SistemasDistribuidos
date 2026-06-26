@@ -52,6 +52,7 @@ export default function NuevaRentaTab() {
         inventory_id: selectedInventory.inventory_id,
         film_id: selectedInventory.film_id,
         title: selectedInventory.film_title,
+        full_name: selectedCustomer.name,
       })
       setSuccessRental({ id: rental.rental_id, date: rental.rental_date })
       toast.success(`Renta #${rental.rental_id} registrada exitosamente`)

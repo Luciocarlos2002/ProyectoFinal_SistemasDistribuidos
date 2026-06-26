@@ -14,13 +14,14 @@ interface Props {
 }
 
 export default function AnulacionModal({ rental, onClose, onCancelled }: Props) {
+  const [selectedStore, setSelectedStore] = useState<1 | 2>(1)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
 
   async function handleConfirm() {
     setSubmitting(true)
     try {
-      const updated = await api.cancelRental(rental.rental_id)
+      const updated = await api.cancelRental(rental.rental_id, selectedStore)
       setDone(true)
       toast.success(`Operación #${rental.rental_id} anulada exitosamente`)
       onCancelled(updated)
@@ -73,6 +74,26 @@ export default function AnulacionModal({ rental, onClose, onCancelled }: Props) 
             </div>
           ) : (
             <>
+              {/* Store selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-slate-500">Tienda:</span>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
+                  {([1, 2] as const).map(id => (
+                    <button
+                      key={id}
+                      onClick={() => setSelectedStore(id)}
+                      className={`px-4 py-1.5 font-medium transition-colors ${
+                        selectedStore === id
+                          ? 'bg-[#1E3A8A] text-white'
+                          : 'bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {id === 1 ? 'Tienda Principal' : 'Sucursal'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Warning banner */}
               <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                 <AlertTriangle size={18} className="text-amber-600 mt-0.5 shrink-0" />

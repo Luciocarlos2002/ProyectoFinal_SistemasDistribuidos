@@ -1,7 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { ShoppingBag, ClipboardList, Film, Store, User, RotateCcw } from 'lucide-react'
+import { ShoppingBag, ClipboardList, Film, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { currentStaff } from '@/lib/api/mockData'
 
 const navItems = [
   { to: '/',           label: 'Nueva Renta',          icon: ShoppingBag  },
@@ -56,37 +55,13 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        {/* Staff info */}
-        <div className="px-4 py-4 border-t border-blue-700/50">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-500/40 shrink-0">
-              <User size={16} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{currentStaff.name}</p>
-              <div className="flex items-center gap-1.5 text-blue-300 text-xs">
-                <Store size={11} />
-                <span className="truncate">{currentStaff.store_name}</span>
-                <span>·</span>
-                <span className="font-mono-data">ID #{currentStaff.staff_id}</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* ── Main ── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Top header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shrink-0">
+        <header className="flex items-center px-6 py-4 bg-white border-b border-slate-200 shrink-0">
           <h1 className="text-lg font-bold text-slate-800">{pageTitle}</h1>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <User size={15} />
-            <span className="font-medium text-slate-700">{currentStaff.name}</span>
-            <span>·</span>
-            <Store size={14} />
-            <span>{currentStaff.store_name}</span>
-          </div>
         </header>
 
         {/* Page content */}

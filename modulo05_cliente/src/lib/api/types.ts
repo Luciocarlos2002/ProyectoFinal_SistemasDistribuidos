@@ -1,11 +1,3 @@
-export interface Staff {
-  staff_id: number
-  name: string
-  role: string
-  store_id: number
-  store_name: string
-}
-
 export interface Customer {
   customer_id: number
   name: string
@@ -52,6 +44,7 @@ export interface CreateRentalPayload {
   inventory_id: number
   film_id: number
   title: string
+  full_name: string
 }
 
 export interface ReturnRentalPayload {

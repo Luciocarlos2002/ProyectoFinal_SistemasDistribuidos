@@ -6,9 +6,9 @@ import { Skeleton } from '@/components/Skeleton'
 import { formatDate, formatSoles } from '@/lib/utils'
 import * as api from '@/lib/api'
 import type { Rental, PenaltyPreview } from '@/lib/api/types'
-import { currentStaff } from '@/lib/api/mockData'
 
 export default function DevolucionTab() {
+  const [selectedStore, setSelectedStore] = useState<1 | 2>(1)
   const [inventoryId, setInventoryId] = useState('')
   const [searchLoading, setSearchLoading] = useState(false)
   const [activeRental, setActiveRental] = useState<Rental | null>(null)
@@ -48,7 +48,7 @@ export default function DevolucionTab() {
     if (!activeRental) return
     setSubmitting(true)
     try {
-      await api.returnRental(activeRental.rental_id, { staff_id: currentStaff.staff_id })
+      await api.returnRental(activeRental.rental_id, { staff_id: selectedStore })
       setDone(true)
       const penaltyMsg = penalty && penalty.penalty_amount > 0
         ? `, penalidad cobrada ${formatSoles(penalty.penalty_amount)}`
@@ -79,8 +79,34 @@ export default function DevolucionTab() {
     return 'idle' as const
   }
 
+  function penaltyCardClass() {
+    if (penalty && penalty.penalty_amount > 0) {
+      return 'animate-fade-in rounded-lg border-l-4 border border-l-amber-400 border-amber-200 bg-amber-50 p-4'
+    }
+    return 'animate-fade-in rounded-lg border-l-4 border border-l-emerald-400 border-emerald-200 bg-emerald-50 p-4'
+  }
+
   return (
     <div className="max-w-xl space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-slate-500">Tienda:</span>
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
+          {([1, 2] as const).map(id => (
+            <button
+              key={id}
+              onClick={() => setSelectedStore(id)}
+              className={`px-4 py-1.5 font-medium transition-colors ${
+                selectedStore === id
+                  ? 'bg-[#1E3A8A] text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {id === 1 ? 'Tienda Principal' : 'Sucursal'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {done && (
         <div className="animate-fade-in flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
           <CheckCircle2 size={20} className="text-emerald-600 mt-0.5 shrink-0" />
@@ -126,9 +152,9 @@ export default function DevolucionTab() {
         {activeRental && !searchLoading && (
           <div className="mt-3 animate-fade-in rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-100 text-sm">
             {[
-              ['N° Renta',   `#${activeRental.rental_id}`],
-              ['Cliente',    activeRental.customer_name],
-              ['Película',   activeRental.film_title],
+              ['N° Renta',    `#${activeRental.rental_id}`],
+              ['Cliente',     activeRental.customer_name],
+              ['Película',    activeRental.film_title],
               ['F. Alquiler', formatDate(activeRental.rental_date)],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between px-4 py-2.5">
@@ -145,7 +171,7 @@ export default function DevolucionTab() {
         {!step1Done && <p className="text-sm text-slate-400">Busca el préstamo activo primero.</p>}
         {step1Done && !penaltyLoaded && searchLoading && <Skeleton className="h-24 w-full rounded-lg" />}
         {penaltyLoaded && penalty !== null && (
-          <div className={`animate-fade-in rounded-lg border-l-4 p-4 ${penalty.penalty_amount > 0 ? 'border-amber-400 bg-amber-50 border border-amber-200' : 'border-emerald-400 bg-emerald-50 border border-emerald-200'}`}>
+          <div className={penaltyCardClass()}>
             {penalty.penalty_amount > 0 ? (
               <>
                 <div className="flex items-center gap-2 mb-3">
