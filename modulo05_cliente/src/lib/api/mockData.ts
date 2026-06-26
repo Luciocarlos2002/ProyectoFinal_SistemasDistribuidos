@@ -5,7 +5,7 @@ export const currentStaff: Staff = {
   name: 'Diego H.',
   role: 'Staff',
   store_id: 1,
-  store_name: 'Tienda 1',
+  store_name: 'Tienda Principal',
 }
 
 export const customers: Customer[] = [
