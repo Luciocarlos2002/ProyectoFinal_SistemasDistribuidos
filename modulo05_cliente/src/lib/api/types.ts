@@ -50,7 +50,8 @@ export interface PenaltyPreview {
 export interface CreateRentalPayload {
   customer_id: number
   inventory_id: number
-  staff_id: number
+  film_id: number
+  title: string
 }
 
 export interface ReturnRentalPayload {

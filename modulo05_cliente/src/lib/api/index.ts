@@ -88,36 +88,38 @@ export async function getCustomerById(customer_id: number): Promise<Customer | n
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
-// GET /inventorys?store_id=1 → {total, items: [{inventory_id, title}]}
+// GET /inventorys?store_id=N → {total, items: [{inventory_id, film_id, title}]}
 // Only available items appear in this list; absent = checked out or doesn't exist
-export async function getAllInventoryItems(): Promise<InventoryItem[]> {
+const STORE_NAMES: Record<number, string> = { 1: 'Tienda Principal', 2: 'Sucursal' }
+
+export async function getAllInventoryItems(storeId: 1 | 2 = 1): Promise<InventoryItem[]> {
   const { items } = await request<{
     total: number
-    items: Array<{ inventory_id: number; title: string }>
-  }>('/inventorys?store_id=1')
+    items: Array<{ inventory_id: number; film_id: number; title: string }>
+  }>(`/inventorys?store_id=${storeId}`)
   return items.map(i => ({
     inventory_id: i.inventory_id,
-    film_id: 0,
+    film_id: i.film_id,
     film_title: i.title,
-    store_id: 1,
-    store_name: 'Tienda 1',
+    store_id: storeId,
+    store_name: STORE_NAMES[storeId],
     rental_rate: 0,
     available: true,
   }))
 }
 
-export async function getInventoryItem(inventory_id: number): Promise<InventoryItem | null> {
+export async function getInventoryItem(inventory_id: number, storeId: 1 | 2 = 1): Promise<InventoryItem | null> {
   const { items } = await request<{
     total: number
-    items: Array<{ inventory_id: number; title: string }>
-  }>('/inventorys?store_id=1')
+    items: Array<{ inventory_id: number; film_id: number; title: string }>
+  }>(`/inventorys?store_id=${storeId}`)
   const found = items.find(i => i.inventory_id === inventory_id)
   return {
     inventory_id,
-    film_id: 0,
+    film_id: found?.film_id ?? 0,
     film_title: found?.title ?? '—',
-    store_id: 1,
-    store_name: 'Tienda 1',
+    store_id: storeId,
+    store_name: STORE_NAMES[storeId],
     rental_rate: 0,
     available: !!found,
   }
