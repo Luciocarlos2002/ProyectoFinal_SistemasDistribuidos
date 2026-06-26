@@ -1,16 +1,18 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { ShoppingBag, ClipboardList, Film, Store, User } from 'lucide-react'
+import { ShoppingBag, ClipboardList, Film, Store, User, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { currentStaff } from '@/lib/api/mockData'
 
 const navItems = [
-  { to: '/',         label: 'Nueva Renta / Devolución', icon: ShoppingBag },
-  { to: '/consulta', label: 'Consulta de Préstamos',    icon: ClipboardList },
+  { to: '/',           label: 'Nueva Renta',          icon: ShoppingBag  },
+  { to: '/devolucion', label: 'Devolución',            icon: RotateCcw    },
+  { to: '/consulta',   label: 'Consulta de Préstamos', icon: ClipboardList },
 ]
 
 const pageTitles: Record<string, string> = {
-  '/':         'Nueva Renta / Devolución',
-  '/consulta': 'Consulta de Préstamos',
+  '/':           'Nueva Renta',
+  '/devolucion': 'Devolución',
+  '/consulta':   'Consulta de Préstamos',
 }
 
 export default function AppLayout() {

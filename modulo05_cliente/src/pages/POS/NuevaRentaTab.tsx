@@ -120,6 +120,7 @@ export default function NuevaRentaTab() {
             selected={selectedInventory}
             onSelect={setSelectedInventory}
             onClear={() => setSelectedInventory(null)}
+            disabled={!step1Done}
           />
         )}
       </StepCard>
