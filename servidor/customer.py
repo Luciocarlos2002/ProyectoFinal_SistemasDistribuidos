@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from services.lista_clientes import (
+from services.customer_service import (
     obtener_clientes_activos,
     CustomerException
 )

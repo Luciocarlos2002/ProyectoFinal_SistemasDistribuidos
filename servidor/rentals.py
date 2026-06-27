@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
-
 from database import get_db_connection
 
 # =============================
@@ -32,6 +32,7 @@ from services.film_service import (
 
 
 router = APIRouter(prefix="/api/v1/rentals", tags=["Rentals"])
+PENALTY_PER_DAY = 2.00
 
 
 # =========================
@@ -45,15 +46,44 @@ class CreateRentalRequest(BaseModel):
     customer_id: int
     full_name: str
 
-class PenaltyPaymentRequest(BaseModel):
-    staff_id: int
 
-class CancelRentalRequest(BaseModel):
-    staff_id: int
+# Funcion para calcular la penalizacion
+def calcular_penalidad(rental_date, rental_duration):
+
+    current_date = datetime.utcnow()
+
+    due_date = rental_date + timedelta(days=rental_duration)
+
+    days_elapsed = (
+        current_date.date() -
+        rental_date.date()
+    ).days
+
+    days_late = max(
+        0,
+        (current_date.date() - due_date.date()).days
+    )
+
+    penalty_amount = round(
+        days_late * PENALTY_PER_DAY,
+        2
+    )
+    
+    has_penalty = penalty_amount > 0
+
+    return {
+        "due_date": due_date,
+        "current_date": current_date,
+        "days_elapsed": days_elapsed,
+        "days_late": days_late,
+        "penalty_per_day": PENALTY_PER_DAY,
+        "penalty_amount": penalty_amount,
+        "has_penalty": has_penalty
+    }
 
 
 # =========================
-# 1. CREATE RENTAL
+# 1. Registra un alquiler y el pago del alquiler en la BD
 # =========================
 
 @router.post("")
@@ -91,6 +121,7 @@ def create_rental(request: CreateRentalRequest):
         )
         
     rental_rate = film["rental_rate"]
+    rental_duration = film["rental_duration"]
     category_name = film["category_name"]
         
     # Conexion a la BD y registrar alquiler y pagos
@@ -107,9 +138,13 @@ def create_rental(request: CreateRentalRequest):
                 category_name,
                 status,
                 rental_date,
-                last_update
+                last_update,
+                rental_duration,
+                penalty_status
             )
             VALUES (
+                %s,
+                %s,
                 %s,
                 %s,
                 %s,
@@ -134,7 +169,9 @@ def create_rental(request: CreateRentalRequest):
             category_name,
             "ALQUILADO",
             datetime.now(),
-            datetime.now()
+            datetime.now(),
+            rental_duration,
+            "LIMPIO"
         ))
 
         rental_id, status, rental_date, last_update = cursor.fetchone()
@@ -192,7 +229,7 @@ def create_rental(request: CreateRentalRequest):
 
 
 # =========================
-# 2. PENALTY PREVIEW
+# 2. Visualiza si existe penalizacion
 # =========================
 
 @router.get("/{rental_id}/penalty-preview")
@@ -202,42 +239,67 @@ def penalty_preview(rental_id: int):
 
         cursor.execute("""
             SELECT
-                r.rental_id,
-                r.rental_date,
-                f.rental_duration
-            FROM rental r
-            JOIN inventory i ON i.inventory_id = r.inventory_id
-            JOIN film f ON f.film_id = i.film_id
-            WHERE r.rental_id = %s
+                rental_date,
+                rental_duration,
+                status,
+                penalty_status
+            FROM rental
+            WHERE rental_id = %s
         """, (rental_id,))
 
-        data = cursor.fetchone()
+        rental = cursor.fetchone()
 
-        if not data:
-            raise HTTPException(404, "Rental not found")
+        if not rental:
+            raise HTTPException(
+                status_code=404,
+                detail="Alquiler no encontrado."
+            )
 
-        rental_id, rental_date, duration = data
+        rental_date, rental_duration, status, penalty_status = rental
 
-        days_elapsed = (datetime.utcnow().date() - rental_date.date()).days
-        days_late = max(0, days_elapsed - duration)
+        if status == "CANCELADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler fue cancelado."
+            )
 
-        penalty = days_late * 1.00
+        if status == "RETORNADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler ya fue retornado."
+            )
+
+        penalty = calcular_penalidad(
+            rental_date,
+            rental_duration
+        )
+
+        # Si ya pagó la penalidad, no volver a mostrar deuda
+        if penalty_status == "PAGADO":
+            penalty["has_penalty"] = False
+            penalty["penalty_status"] = "PAGADO"
+            penalty["penalty_amount"] = 0
+            penalty["days_late"] = 0
+
+        else:
+
+            if penalty["has_penalty"]:
+                penalty["penalty_status"] = "PENDIENTE"
+            else:
+                penalty["penalty_status"] = "LIMPIO"
 
         return {
             "status_code": 200,
-            "message": "Penalización calculada",
+            "message": "Penalización calculada correctamente.",
             "data": {
                 "rental_id": rental_id,
-                "days_elapsed": days_elapsed,
-                "days_late": days_late,
-                "penalty_per_day": 1.00,
-                "penalty_amount": penalty
+                **penalty
             }
         }
 
 
 # =========================
-# 3. RETURN RENTAL
+# 3. Retornar Alquiler
 # =========================
 
 @router.put("/{rental_id}/return")
@@ -247,37 +309,78 @@ def return_rental(rental_id: int):
 
         cursor.execute("""
             SELECT
-                r.inventory_id,
-                r.status
-            FROM rental r
-            JOIN inventory i
-                ON i.inventory_id = r.inventory_id
-            WHERE r.rental_id = %s
+                inventory_id,
+                rental_date,
+                rental_duration,
+                status,
+                penalty_status
+            FROM rental
+            WHERE rental_id = %s
         """, (rental_id,))
 
-        data = cursor.fetchone()
+        rental = cursor.fetchone()
 
-        if not data:
+        if not rental:
             raise HTTPException(
                 status_code=404,
-                detail="Alquiler no encontrado"
+                detail="Alquiler no encontrado."
             )
 
-        inventory_id, status = data
+        (
+            inventory_id,
+            rental_date,
+            rental_duration,
+            status,
+            penalty_status
+        ) = rental
 
         if status == "RETORNADO":
             raise HTTPException(
                 status_code=400,
-                detail="El alquiler ya fue retornado"
+                detail="El alquiler ya fue retornado."
             )
 
         if status == "CANCELADO":
             raise HTTPException(
                 status_code=400,
-                detail="El alquiler fue cancelado"
+                detail="El alquiler fue cancelado."
             )
 
+        # Calcular penalidad
+        penalty = calcular_penalidad(
+            rental_date,
+            rental_duration
+        )
 
+        # Si existe penalidad y aún no fue pagada
+        if penalty["has_penalty"] and penalty_status != "PAGADO":
+
+            # Actualizar el estado para mantener sincronizada la BD
+            cursor.execute("""
+                UPDATE rental
+                SET
+                    penalty_status = 'PENDIENTE',
+                    last_update = %s
+                WHERE rental_id = %s
+            """, (
+                datetime.now(),
+                rental_id
+            ))
+
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "message": "Debe pagar la penalidad antes de devolver la película.",
+                    "data": {
+                        "rental_id": rental_id,
+                        "days_late": penalty["days_late"],
+                        "penalty_amount": penalty["penalty_amount"],
+                        "penalty_status": "PENDIENTE"
+                    }
+                }
+            )
+
+        # Registrar devolución
         cursor.execute("""
             UPDATE rental
             SET
@@ -294,88 +397,164 @@ def return_rental(rental_id: int):
 
         return {
             "status_code": 200,
-            "message": "El alquiler se devolvió correctamente",
+            "message": "La película fue devuelta correctamente.",
             "data": {
                 "rental_id": rental_id,
                 "inventory_id": inventory_id,
-                "status": "RETORNADO"
+                "status": "RETORNADO",
+                "return_date": datetime.now()
             }
         }
 
 
-
 # =========================
-# 4. PENALTY PAYMENT
+# 4. Realiza el pago de la penalizacion
 # =========================
 
 @router.post("/{rental_id}/penalty-payment")
-def penalty_payment(rental_id: int, request: PenaltyPaymentRequest):
+def penalty_payment(
+    rental_id: int
+):
+    
+    # Consumiendo servicio Login
+    try:
+        
+        usuario = login(
+            "manager@sakila.com",
+            "manager123"
+            )
+        
+    except AuthException as ex:
 
+        raise HTTPException(
+            status_code=400,
+            detail=str(ex)
+        )
+        
+    staff_id = usuario["staff_id"]
+    
     with get_db_connection() as (_, cursor):
 
         cursor.execute("""
             SELECT
-                r.customer_id,
-                r.inventory_id,
-                r.rental_date,
-                f.rental_duration
-            FROM rental r
-            JOIN inventory i ON i.inventory_id = r.inventory_id
-            JOIN film f ON f.film_id = i.film_id
-            WHERE r.rental_id = %s
+                customer_id,
+                fullname,
+                rental_date,
+                rental_duration,
+                status,
+                penalty_status
+            FROM rental
+            WHERE rental_id = %s
         """, (rental_id,))
 
-        data = cursor.fetchone()
+        rental = cursor.fetchone()
 
-        if not data:
-            raise HTTPException(404, "Rental not found")
+        if not rental:
+            raise HTTPException(
+                status_code=404,
+                detail="Alquiler no encontrado."
+            )
 
-        customer_id, inventory_id, rental_date, duration = data
+        (
+            customer_id,
+            fullname,
+            rental_date,
+            rental_duration,
+            rental_status,
+            penalty_status
+        ) = rental
 
-        days_elapsed = (datetime.utcnow().date() - rental_date.date()).days
-        days_late = max(0, days_elapsed - duration)
+        if rental_status == "RETORNADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler ya fue retornado."
+            )
 
-        penalty = days_late * 1.00
+        if rental_status == "CANCELADO":
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler fue cancelado."
+            )
 
-        if penalty == 0:
-            return {
-                "message": "Sin penalización",
-                "data": {
-                    "rental_id": rental_id,
-                    "penalty": 0.0
-                }
-            }
+        if penalty_status == "PAGADO":
+            raise HTTPException(
+                status_code=400,
+                detail="La penalidad ya fue pagada."
+            )
 
+        penalty = calcular_penalidad(
+            rental_date,
+            rental_duration
+        )
+
+        amount = penalty['penalty_amount']
+        
+        if not penalty["has_penalty"]:
+
+            raise HTTPException(
+                status_code=400,
+                detail="El alquiler no tiene penalidad."
+            )
+
+        # Registrar el pago
         cursor.execute("""
-            INSERT INTO payment (
+            INSERT INTO payment(
                 customer_id,
+                fullname,
                 staff_id,
                 rental_id,
                 amount,
-                payment_date
+                status,
+                payment_date,
+                last_update
             )
-            VALUES (%s, %s, %s, %s, %s)
-        """, (
+            VALUES(
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+            )
+        """,(
             customer_id,
-            request.staff_id,
+            fullname,
+            staff_id,
             rental_id,
-            penalty,
+            amount,
+            "PAGADO",
+            datetime.now(),
             datetime.now()
         ))
 
+        # Actualizar estado de la penalidad
+        cursor.execute("""
+            UPDATE rental
+            SET
+                penalty_status='PAGADO',
+                last_update=%s
+            WHERE rental_id=%s
+        """,(
+            datetime.now(),
+            rental_id
+        ))
+
         return {
-            "status_code": 200,
-            "message": "Pago de multa registrado",
-            "data": {
-                "rental_id": rental_id,
-                "penalty_paid": penalty,
-                "status": "PAGADO"
+            "status_code":200,
+            "message":"La penalidad fue pagada correctamente.",
+            "data":{
+                "rental_id":rental_id,
+                "penalty_paid":amount,
+                "penalty_status":"PAGADO"
             }
         }
 
 
 # =========================
-# 5. Obtener Renta por filtro(día, semana, numeroDni, status)
+# 5. Obtener Renta por filtro(día, semana, customer_id, status)
+# Opcionales (inventory_id, category_name)
 # =========================
 
 @router.get("")
@@ -527,6 +706,8 @@ def get_rental(rental_id: int):
         """, (rental_id,))
 
         row = cursor.fetchone()
+        print("ROW:", row)
+        print("COLUMNAS:", len(row))
 
         if not row:
             raise HTTPException(
@@ -542,10 +723,10 @@ def get_rental(rental_id: int):
                 "inventory_id": row[1],
                 "title": row[2],
                 "customer_id": row[3],
-                "fullName": row[4],
+                "fullname": row[4],
                 "status": row[5],
-                "rental_date": row[6].isoformat() if row[7] else None,
-                "return_date": row[7].isoformat() if row[8] else None
+                "rental_date": row[6].isoformat() if row[6] else None,
+                "return_date": row[7].isoformat() if row[7] else None
             }
         }
 
@@ -555,8 +736,25 @@ def get_rental(rental_id: int):
 # =========================
 
 @router.put("/{rental_id}/cancel")
-def cancel_rental(rental_id: int, request: CancelRentalRequest):
+def cancel_rental(rental_id: int):
+    
+    # Consumiendo servicio Login
+    try:
+        
+        usuario = login(
+            "manager@sakila.com",
+            "manager123"
+            )
+        
+    except AuthException as ex:
 
+        raise HTTPException(
+            status_code=400,
+            detail=str(ex)
+        )
+        
+    staff_id = usuario["staff_id"]
+    
     with get_db_connection() as (conn, cursor):
 
         cursor.execute("""
@@ -591,8 +789,6 @@ def cancel_rental(rental_id: int, request: CancelRentalRequest):
                 detail="El alquiler ya fue retornado"
             )
 
-        current_date = datetime.now()
-
         cursor.execute("""
             UPDATE rental
             SET
@@ -601,9 +797,9 @@ def cancel_rental(rental_id: int, request: CancelRentalRequest):
                 last_update = %s
             WHERE rental_id = %s
         """, (
-            current_date,
+            datetime.now(),
             "CANCELADO",
-            current_date,
+            datetime.now(),
             rental_id
         ))
 
@@ -641,12 +837,12 @@ def cancel_rental(rental_id: int, request: CancelRentalRequest):
             """, (
                 customer_id,
                 fullname,
-                request.staff_id,
+                staff_id,
                 rental_id,
                 -abs(total_refund),
                 "REEMBOLSO",
-                current_date,
-                current_date
+                datetime.now(),
+                datetime.now()
             ))
 
         conn.commit()
