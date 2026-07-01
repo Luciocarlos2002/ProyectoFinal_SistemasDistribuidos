@@ -10,7 +10,7 @@ interface Props {
   onClear: () => void
 }
 
-export default function CustomerSearch({ customers, loading, selected, onSelect, onClear }: Props) {
+export default function CustomerSearch({ customers, loading, selected, onSelect, onClear }: Readonly<Props>) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -26,7 +26,7 @@ export default function CustomerSearch({ customers, loading, selected, onSelect,
   }, [])
 
   const filtered = query.trim()
-    ? customers.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
+    ? customers.filter(c => c.name.toLowerCase().startsWith(query.toLowerCase()))
     : customers
 
   function handleSelect(c: Customer) {

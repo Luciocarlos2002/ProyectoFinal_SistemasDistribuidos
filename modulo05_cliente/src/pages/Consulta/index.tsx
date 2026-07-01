@@ -5,8 +5,9 @@ import RentalTable from '@/components/RentalTable'
 import { SkeletonRows } from '@/components/Skeleton'
 import RentalDetailDrawer from './RentalDetailDrawer'
 import AnulacionModal from './AnulacionModal'
+import CustomerSearch from '@/pages/POS/CustomerSearch'
 import * as api from '@/lib/api'
-import type { Rental, RentalsFilter } from '@/lib/api/types'
+import type { Rental, RentalsFilter, Customer } from '@/lib/api/types'
 
 type FilterTab = 'hoy' | 'semana' | 'cliente' | 'operacion'
 
@@ -19,8 +20,11 @@ const filterTabs: { id: FilterTab; label: string; icon: React.FC<{ size?: number
 
 export default function ConsultaPage() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('semana')
-  const [customerQuery, setCustomerQuery] = useState('')
   const [rentalIdQuery, setRentalIdQuery] = useState('')
+
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([])
+  const [customersLoading, setCustomersLoading] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [rentals, setRentals] = useState<Rental[]>([])
@@ -28,32 +32,49 @@ export default function ConsultaPage() {
   const [selectedRental, setSelectedRental] = useState<Rental | null>(null)
   const [showAnulacion, setShowAnulacion] = useState(false)
 
+  useEffect(() => {
+    if (activeFilter !== 'cliente') return
+    setCustomersLoading(true)
+    api.searchCustomers('')
+      .then(setAllCustomers)
+      .catch(() => {})
+      .finally(() => setCustomersLoading(false))
+  }, [activeFilter])
+
+  useEffect(() => {
+    if (activeFilter !== 'cliente' || !selectedCustomer) return
+    setLoading(true)
+    api.getRentals({ customer_id: selectedCustomer.customer_id })
+      .then(setRentals)
+      .finally(() => setLoading(false))
+  }, [activeFilter, selectedCustomer])
+
   const loadRentals = useCallback(async () => {
     setLoading(true)
     try {
       const filters: RentalsFilter = {}
       if (activeFilter === 'hoy')    filters.day  = true
       if (activeFilter === 'semana') filters.week = true
-      if (activeFilter === 'cliente' && customerQuery.trim()) {
-        // Filter client-side by name since mock doesn't have text search on list
-        const all = await api.getRentals({})
-        setRentals(all.filter(r => r.customer_name.toLowerCase().includes(customerQuery.toLowerCase())))
-        return
-      }
       if (activeFilter === 'operacion' && rentalIdQuery.trim()) {
-        filters.rental_id = parseInt(rentalIdQuery)
+        filters.rental_id = Number.parseInt(rentalIdQuery)
       }
       const data = await api.getRentals(filters)
       setRentals(data)
     } finally {
       setLoading(false)
     }
-  }, [activeFilter, customerQuery, rentalIdQuery])
+  }, [activeFilter, rentalIdQuery])
 
   useEffect(() => {
     if (activeFilter === 'cliente' || activeFilter === 'operacion') return
     loadRentals()
   }, [activeFilter, loadRentals])
+
+  function handleTabChange(tab: FilterTab) {
+    setActiveFilter(tab)
+    setRentals([])
+    setSelectedCustomer(null)
+  }
 
   function handleRowClick(rental: Rental) {
     setSelectedRental(rental)
@@ -74,7 +95,7 @@ export default function ConsultaPage() {
         {filterTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => { setActiveFilter(id); setRentals([]) }}
+            onClick={() => handleTabChange(id)}
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium border transition-all duration-150',
               activeFilter === id
@@ -88,26 +109,20 @@ export default function ConsultaPage() {
         ))}
       </div>
 
-      {/* Search inputs for cliente / operacion */}
+      {/* Customer autocomplete */}
       {activeFilter === 'cliente' && (
-        <div className="flex gap-2 mb-5 max-w-md">
-          <input
-            value={customerQuery}
-            onChange={e => setCustomerQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && loadRentals()}
-            placeholder="Nombre del cliente..."
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+        <div className="mb-5 max-w-md">
+          <CustomerSearch
+            customers={allCustomers}
+            loading={customersLoading}
+            selected={selectedCustomer}
+            onSelect={c => { setSelectedCustomer(c); setRentals([]) }}
+            onClear={() => { setSelectedCustomer(null); setRentals([]) }}
           />
-          <button
-            onClick={loadRentals}
-            disabled={loading}
-            className="flex items-center gap-2 rounded-lg bg-[#0D9488] px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
-          >
-            <Search size={15} /> Buscar
-          </button>
         </div>
       )}
 
+      {/* Operation number search */}
       {activeFilter === 'operacion' && (
         <div className="flex gap-2 mb-5 max-w-xs">
           <input
