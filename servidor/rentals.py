@@ -4,6 +4,14 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 from typing import Optional
 from database import get_db_connection
+import requests
+import logging
+
+# =============================
+# consume la configuracion del .env
+# =============================
+from config import WEBHOOK_SECRET_KEY, INVENTORY_SYNC_URL
+
 
 # =============================
 # consume el servicio cliente
@@ -30,7 +38,7 @@ from services.film_service import (
     FilmException
 )
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/rentals", tags=["Rentals"])
 PENALTY_PER_DAY = 2.00
 
@@ -80,6 +88,40 @@ def calcular_penalidad(rental_date, rental_duration):
         "penalty_amount": penalty_amount,
         "has_penalty": has_penalty
     }
+
+
+# Funcion para sincronizar con el servicio inventory
+def sync_inventory(inventory_id: int, status: str) -> bool:
+    headers = {
+        "X-API-KEY": WEBHOOK_SECRET_KEY,
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "inventory_id": inventory_id,
+        "status": status
+    }
+
+    try:
+        response = requests.patch(
+            INVENTORY_SYNC_URL,
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        logger.info(
+            f"Inventario {inventory_id} sincronizado correctamente ({status})"
+        )
+        return True
+
+    except requests.RequestException as e:
+        logger.error(
+            f"No se pudo sincronizar el inventario {inventory_id}: {e}"
+        )
+        return False
 
 
 # =========================
@@ -140,9 +182,11 @@ def create_rental(request: CreateRentalRequest):
                 rental_date,
                 last_update,
                 rental_duration,
-                penalty_status
+                penalty_status,
+                fee
             )
             VALUES (
+                %s,
                 %s,
                 %s,
                 %s,
@@ -171,7 +215,8 @@ def create_rental(request: CreateRentalRequest):
             datetime.now(),
             datetime.now(),
             rental_duration,
-            "LIMPIO"
+            "LIMPIO",
+            rental_rate
         ))
 
         rental_id, status, rental_date, last_update = cursor.fetchone()
@@ -208,6 +253,11 @@ def create_rental(request: CreateRentalRequest):
             datetime.now(),
             datetime.now()
         ))
+        
+        sync_inventory(
+            inventory_id=request.inventory_id,
+            status="rented"
+        )
 
         return {
             "status_code": 200,
@@ -394,6 +444,11 @@ def return_rental(rental_id: int):
             datetime.now(),
             rental_id
         ))
+
+        sync_inventory(
+            inventory_id=inventory_id,
+            status="available"
+        )
 
         return {
             "status_code": 200,
@@ -616,7 +671,8 @@ def get_rentals(
                 category_name,
                 status,
                 rental_date,
-                return_date
+                return_date,
+                fee
             FROM rental
             WHERE 1=1
         """
@@ -675,7 +731,8 @@ def get_rentals(
                     "category_name": r[6],
                     "status": r[7],
                     "rental_date": r[8],
-                    "return_date": r[9]
+                    "return_date": r[9],
+                    "fee": r[10]
                 }
                 for r in rows
             ]
@@ -700,7 +757,8 @@ def get_rental(rental_id: int):
                 fullname,
                 status,
                 rental_date,
-                return_date
+                return_date,
+                fee
             FROM rental
             WHERE rental_id = %s
         """, (rental_id,))
@@ -726,7 +784,8 @@ def get_rental(rental_id: int):
                 "fullname": row[4],
                 "status": row[5],
                 "rental_date": row[6].isoformat() if row[6] else None,
-                "return_date": row[7].isoformat() if row[7] else None
+                "return_date": row[7].isoformat() if row[7] else None,
+                "fee": row[8]
             }
         }
 
@@ -802,6 +861,11 @@ def cancel_rental(rental_id: int):
             datetime.now(),
             rental_id
         ))
+
+        sync_inventory(
+            inventory_id=inventory_id,
+            status="available"
+        )
 
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
