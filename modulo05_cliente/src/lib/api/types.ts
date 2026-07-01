@@ -37,6 +37,8 @@ export interface PenaltyPreview {
   days_late: number
   penalty_per_day: number
   penalty_amount: number
+  has_penalty: boolean
+  penalty_status: 'LIMPIO' | 'PENDIENTE' | 'PAGADO'
 }
 
 export interface CreateRentalPayload {
@@ -45,10 +47,6 @@ export interface CreateRentalPayload {
   film_id: number
   title: string
   full_name: string
-}
-
-export interface ReturnRentalPayload {
-  staff_id: number
 }
 
 export interface RentalsFilter {

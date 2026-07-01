@@ -1,6 +1,6 @@
 import type {
   Customer, InventoryItem, Rental, PenaltyPreview,
-  CreateRentalPayload, ReturnRentalPayload, RentalsFilter,
+  CreateRentalPayload, RentalsFilter,
 } from './types'
 const BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000'
 
@@ -150,19 +150,21 @@ export async function getPenaltyPreview(rental_id: number): Promise<PenaltyPrevi
   }
 }
 
-// PUT /api/v1/rentals/{rental_id}/return  +  POST /penalty-payment (if penalty > 0)
-export async function returnRental(rental_id: number, payload: ReturnRentalPayload): Promise<Rental> {
+// PUT /api/v1/rentals/{rental_id}/return  (blocks if penalty unpaid)
+export async function returnRental(rental_id: number): Promise<Rental> {
   await request(`/api/v1/rentals/${rental_id}/return`, {
     method: 'PUT',
   })
-  // register penalty charge — endpoint handles the no-penalty case gracefully
-  await request(`/api/v1/rentals/${rental_id}/penalty-payment`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }).catch(() => { /* safe to ignore: penalty calc after return is best-effort */ })
   const updated = await getRentalById(rental_id)
   if (!updated) throw new Error('No se pudo obtener la renta actualizada')
   return updated
+}
+
+// POST /api/v1/rentals/{rental_id}/penalty-payment  (no body — staff_id resolved server-side)
+export async function payPenalty(rental_id: number): Promise<void> {
+  await request(`/api/v1/rentals/${rental_id}/penalty-payment`, {
+    method: 'POST',
+  })
 }
 
 // GET /api/v1/rentals
@@ -191,11 +193,10 @@ export async function getRentalById(rental_id: number): Promise<Rental | null> {
   }
 }
 
-// PUT /api/v1/rentals/{rental_id}/cancel
-export async function cancelRental(rental_id: number, staffId: number): Promise<Rental> {
+// PUT /api/v1/rentals/{rental_id}/cancel  (no body — staff_id resolved server-side)
+export async function cancelRental(rental_id: number): Promise<Rental> {
   await request(`/api/v1/rentals/${rental_id}/cancel`, {
     method: 'PUT',
-    body: JSON.stringify({ staff_id: staffId }),
   })
   const updated = await getRentalById(rental_id)
   if (!updated) throw new Error('No se pudo obtener la renta actualizada')
