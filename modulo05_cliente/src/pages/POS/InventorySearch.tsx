@@ -49,22 +49,19 @@ export default function InventorySearch({ items, loading, selected, onSelect, on
 
   if (selected) {
     return (
-      <div className="animate-fade-in rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-        <div className="flex items-center gap-2 justify-between">
+      <div className="p-3 border rounded-lg animate-fade-in border-emerald-200 bg-emerald-50">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Film size={16} className="text-emerald-600" />
             <div>
-              <p className="font-semibold text-sm text-slate-800">{selected.film_title}</p>
+              <p className="text-sm font-semibold text-slate-800">{selected.film_title}</p>
               <p className="text-xs text-slate-500 mt-0.5">
                 {selected.store_name} · ID-{selected.inventory_id}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-              DISPONIBLE
-            </span>
-            <button onClick={handleClear} className="text-slate-400 hover:text-slate-600 text-sm">
+            <button onClick={handleClear} className="text-sm text-slate-400 hover:text-slate-600">
               Cambiar
             </button>
           </div>
@@ -82,7 +79,7 @@ export default function InventorySearch({ items, loading, selected, onSelect, on
           onFocus={() => { if (!disabled) setOpen(true) }}
           placeholder={inputPlaceholder()}
           disabled={loading || disabled}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+          className="w-full px-3 py-2 pr-8 text-sm border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
         />
         {loading && (
           <Loader2 size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
@@ -90,9 +87,9 @@ export default function InventorySearch({ items, loading, selected, onSelect, on
       </div>
 
       {open && !loading && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden max-h-56 overflow-y-auto">
+        <div className="absolute left-0 right-0 z-20 mt-1 overflow-hidden overflow-y-auto bg-white border rounded-lg shadow-lg top-full border-slate-200 max-h-56">
           {filtered.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-4">Sin resultados</p>
+            <p className="py-4 text-sm text-center text-slate-400">Sin resultados</p>
           ) : (
             filtered.map((item, idx) => (
               <button
@@ -101,7 +98,7 @@ export default function InventorySearch({ items, loading, selected, onSelect, on
                 className={`w-full text-left flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 transition-colors text-sm ${idx === 0 ? '' : 'border-t border-slate-100'}`}
               >
                 <span className="font-medium text-slate-800">{item.film_title}</span>
-                <span className="text-xs text-slate-400 shrink-0 ml-2">ID-{item.inventory_id}</span>
+                <span className="ml-2 text-xs text-slate-400 shrink-0">ID-{item.inventory_id}</span>
               </button>
             ))
           )}
