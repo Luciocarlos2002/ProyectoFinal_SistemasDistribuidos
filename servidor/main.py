@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from customer import router as customer_router
 from inventory import router as inventory_router
 from rentals import router as rentals_router
+from payment import router as payments_router
 
 app = FastAPI(
     title="Módulo de Alquileres y Devoluciones (Rental POS)"
@@ -18,4 +19,5 @@ app.add_middleware(
 
 app.include_router(customer_router)
 app.include_router(inventory_router)
+app.include_router(payments_router)
 app.include_router(rentals_router)
